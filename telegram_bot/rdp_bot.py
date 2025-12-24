@@ -2781,11 +2781,15 @@ def tumbal_list_images(call):
                  f"root@{ip}", """
 mkdir -p /root/rdp-images
 cd /root/rdp-images
-count=$(find . -maxdepth 1 -type f 2>/dev/null | wc -l)
+
+# List ALL files in directory
+echo "FILES_START"
+ls -1 --time-style=+"%Y-%m-%d" -lhS 2>/dev/null | grep -E "\\.(img|img\\.gz|qcow2|raw)$" | awk '{print $5"|"$6"|"$NF}'
+echo "FILES_END"
+
+# Also show total count
+count=$(ls -1 2>/dev/null | grep -E "\\.(img|img\\.gz|qcow2|raw)$" | wc -l)
 echo "FILE_COUNT:$count"
-if [ "$count" -gt 0 ]; then
-    ls -1 --time-style=+"%Y-%m-%d" -lhS 2>/dev/null | grep -v "^total" | awk '{print $5"|"$6"|"$NF}'
-fi
 """],
                 capture_output=True, text=True, timeout=30
             )
@@ -2796,13 +2800,19 @@ fi
             file_count = 0
             files_list = []  # List of (filename, size, date)
             
+            # Parse output
+            in_files_section = False
             for line in output.split('\n'):
                 if line.startswith("FILE_COUNT:"):
                     try:
                         file_count = int(line.replace("FILE_COUNT:", "").strip())
                     except:
                         pass
-                elif "|" in line:
+                elif line == "FILES_START":
+                    in_files_section = True
+                elif line == "FILES_END":
+                    in_files_section = False
+                elif in_files_section and "|" in line:
                     parts = line.split("|")
                     if len(parts) >= 3:
                         size = parts[0]
@@ -2813,17 +2823,18 @@ fi
 
             markup = types.InlineKeyboardMarkup()
 
-            if file_count == 0:
+            if file_count == 0 or len(files_list) == 0:
                 text = f"""📋 <b>LOCAL IMAGES DI {name.upper()}</b>
 ━━━━━━━━━━━━━━━━━━
 
 📍 IP: <code>{ip}</code>
+📂 Path: <code>/root/rdp-images/</code>
 
 📁 <b>Total: 0 file</b>
 
 Folder kosong. Gunakan <b>🏗 Build Image</b> untuk membuat image."""
                 
-                markup.add(types.InlineKeyboardButton("🏗 Build Image", callback_data="tumbal_build"))
+                markup.add(types.InlineKeyboardButton("🏗 Build Image", callback_data="tumbal_build_golden"))
             else:
                 # Build file list text
                 files_text = ""
