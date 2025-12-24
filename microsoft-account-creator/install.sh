@@ -94,59 +94,83 @@ echo -e "${CYAN}                    STEP 2: CONFIGURATION                    ${N
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
-# Telegram Bot Token
-echo -e "${YELLOW}📱 TELEGRAM BOT SETUP${NC}"
-echo -e "   Get token from @BotFather on Telegram"
-echo ""
-read -p "   Enter Telegram Bot Token: " BOT_TOKEN
-while [ -z "$BOT_TOKEN" ]; do
-  print_error "Bot token cannot be empty!"
-  read -p "   Enter Telegram Bot Token: " BOT_TOKEN
-done
-
-# Admin IDs
-echo ""
-echo -e "   Get your ID from @userinfobot on Telegram"
-read -p "   Enter Admin Telegram ID(s) [comma separated]: " ADMIN_IDS
-while [ -z "$ADMIN_IDS" ]; do
-  print_error "Admin ID cannot be empty!"
-  read -p "   Enter Admin Telegram ID(s): " ADMIN_IDS
-done
-
-echo ""
-echo -e "${YELLOW}🔐 2CAPTCHA SETUP${NC}"
-echo -e "   Get API key from https://2captcha.com"
-echo ""
-read -p "   Enter 2Captcha API Key [or press Enter to skip]: " CAPTCHA_KEY
-
-echo ""
-echo -e "${YELLOW}🌐 WEBSHARE.IO PROXY SETUP${NC}"
-echo -e "   Steps in Webshare Dashboard:"
-echo -e "   1. Go to ${CYAN}Proxy Settings${NC}"
-echo -e "   2. Set Authentication: ${GREEN}IP Authentication${NC}"
-echo -e "   3. Add your server IP to whitelist"
-echo -e "   4. Set Connection: ${GREEN}Rotating Proxy Endpoint${NC}"
-echo -e "   5. Copy the rotating endpoint (e.g., p.webshare.io:80)"
-echo ""
-read -p "   Enter Rotating Proxy Endpoint [default: p.webshare.io:80]: " ROTATING_PROXY
-if [ -z "$ROTATING_PROXY" ]; then
-  ROTATING_PROXY="p.webshare.io:80"
+# Check if config already exists
+SKIP_CONFIG=false
+if [ -f "$ENV_FILE" ]; then
+  echo -e "${GREEN}✓ Existing configuration found!${NC}"
+  echo ""
+  cat $ENV_FILE | head -2
+  echo ""
+  read -p "   Keep existing config? [Y/n]: " KEEP_CONFIG
+  if [ -z "$KEEP_CONFIG" ] || [ "$KEEP_CONFIG" = "Y" ] || [ "$KEEP_CONFIG" = "y" ]; then
+    SKIP_CONFIG=true
+    print_success "Keeping existing configuration"
+    
+    # Load existing values
+    source $ENV_FILE
+    BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+    
+    # Get existing proxy from config.js
+    ROTATING_PROXY=$(grep "ROTATING_PROXY:" $CONFIG_FILE 2>/dev/null | cut -d"'" -f2)
+    CAPTCHA_KEY=$(grep "CAPTCHA_API_KEY:" $CONFIG_FILE 2>/dev/null | cut -d"'" -f2)
+  fi
 fi
-echo -e "   ${GREEN}✓ Using: $ROTATING_PROXY${NC}"
+
+if [ "$SKIP_CONFIG" = false ]; then
+  # Telegram Bot Token
+  echo -e "${YELLOW}📱 TELEGRAM BOT SETUP${NC}"
+  echo -e "   Get token from @BotFather on Telegram"
+  echo ""
+  read -p "   Enter Telegram Bot Token: " BOT_TOKEN
+  while [ -z "$BOT_TOKEN" ]; do
+    print_error "Bot token cannot be empty!"
+    read -p "   Enter Telegram Bot Token: " BOT_TOKEN
+  done
+
+  # Admin IDs
+  echo ""
+  echo -e "   Get your ID from @userinfobot on Telegram"
+  read -p "   Enter Admin Telegram ID(s) [comma separated]: " ADMIN_IDS
+  while [ -z "$ADMIN_IDS" ]; do
+    print_error "Admin ID cannot be empty!"
+    read -p "   Enter Admin Telegram ID(s): " ADMIN_IDS
+  done
+
+  echo ""
+  echo -e "${YELLOW}🔐 2CAPTCHA SETUP${NC}"
+  echo -e "   Get API key from https://2captcha.com"
+  echo ""
+  read -p "   Enter 2Captcha API Key [or press Enter to skip]: " CAPTCHA_KEY
+
+  echo ""
+  echo -e "${YELLOW}🌐 WEBSHARE.IO PROXY SETUP${NC}"
+  echo -e "   Steps in Webshare Dashboard:"
+  echo -e "   1. Go to ${CYAN}Proxy Settings${NC}"
+  echo -e "   2. Set Authentication: ${GREEN}IP Authentication${NC}"
+  echo -e "   3. Add your server IP to whitelist (run: curl ifconfig.me)"
+  echo -e "   4. Set Connection: ${GREEN}Rotating Proxy Endpoint${NC}"
+  echo -e "   5. Copy the rotating endpoint"
+  echo ""
+  read -p "   Enter Rotating Proxy Endpoint [default: p.webshare.io:80]: " ROTATING_PROXY
+  if [ -z "$ROTATING_PROXY" ]; then
+    ROTATING_PROXY="p.webshare.io:80"
+  fi
+  echo -e "   ${GREEN}✓ Using: $ROTATING_PROXY${NC}"
+
+  # Create .env file
+  print_status "Creating .env file..."
+  cat > $ENV_FILE << EOF
+TELEGRAM_BOT_TOKEN=$BOT_TOKEN
+ADMIN_IDS=$ADMIN_IDS
+EOF
+  print_success ".env file created"
+fi
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${CYAN}                    STEP 3: SAVING CONFIG                    ${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-
-# Create .env file
-print_status "Creating .env file..."
-cat > $ENV_FILE << EOF
-TELEGRAM_BOT_TOKEN=$BOT_TOKEN
-ADMIN_IDS=$ADMIN_IDS
-EOF
-print_success ".env file created"
 
 # Update config.js with values
 print_status "Updating config.js..."
