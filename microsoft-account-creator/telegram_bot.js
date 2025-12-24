@@ -76,6 +76,18 @@ bot.onText(/\/start/, (msg) => {
   );
 });
 
+// Safe edit message (ignores "message not modified" error)
+async function safeEditMessage(chatId, msgId, text, options = {}) {
+  try {
+    return await bot.editMessageText(text, { chat_id: chatId, message_id: msgId, ...options });
+  } catch (err) {
+    if (err.response?.body?.error_code === 400 && err.response?.body?.description?.includes('message is not modified')) {
+      return; // Ignore this harmless error
+    }
+    throw err;
+  }
+}
+
 // Callback handler
 bot.on('callback_query', async (query) => {
   if (!isAdmin(query.from.id)) {
@@ -88,8 +100,8 @@ bot.on('callback_query', async (query) => {
 
   switch (query.data) {
     case 'menu_generate':
-      await bot.editMessageText('🚀 *Generate Accounts*\n\nPilih jumlah:', {
-        chat_id: chatId, message_id: msgId, parse_mode: 'Markdown',
+      await safeEditMessage(chatId, msgId, '🚀 *Generate Accounts*\n\nPilih jumlah:', {
+        parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
             [
@@ -109,14 +121,14 @@ bot.on('callback_query', async (query) => {
       break;
 
     case 'menu_settings':
-      await bot.editMessageText(
+      await safeEditMessage(chatId, msgId,
         `⚙️ *Settings*\n\n` +
         `🎯 2Captcha: \`${config.CAPTCHA_API_KEY ? config.CAPTCHA_API_KEY.substring(0, 8) + '...' : 'Not set'}\`\n` +
         `📧 Domain: \`${config.EMAIL_DOMAIN}\`\n` +
         `🔄 Recovery: \`${config.ADD_RECOVERY_EMAIL ? 'ON' : 'OFF'}\`\n` +
         `🖥️ Headless: \`${config.HEADLESS ? 'ON' : 'OFF'}\``,
         {
-          chat_id: chatId, message_id: msgId, parse_mode: 'Markdown',
+          parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
               [{ text: `🎯 2Captcha: ${config.CAPTCHA_API_KEY ? '✅ Set' : '❌ Not set'}`, callback_data: 'set_2captcha' }],
@@ -132,7 +144,7 @@ bot.on('callback_query', async (query) => {
       break;
 
     case 'menu_proxy':
-      await bot.editMessageText(
+      await safeEditMessage(chatId, msgId,
         `🌐 *Webshare.io Rotating Proxy*\n\n` +
         `Status: \`${config.USE_PROXY ? 'ON' : 'OFF'}\`\n` +
         `Host: \`${config.PROXY_HOST || 'p.webshare.io'}\`\n` +
@@ -141,7 +153,7 @@ bot.on('callback_query', async (query) => {
         `Set proxy dengan:\n\`/setproxy user:pass@host:port\`\n` +
         `Contoh: \`/setproxy nyrtjgvw-rotate:xxx@p.webshare.io:80\``,
         {
-          chat_id: chatId, message_id: msgId, parse_mode: 'Markdown',
+          parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
               [{ text: `🌐 Proxy: ${config.USE_PROXY ? '✅ ON' : '❌ OFF'}`, callback_data: 'toggle_proxy' }],
@@ -181,13 +193,13 @@ bot.on('callback_query', async (query) => {
       break;
 
     case 'set_2captcha':
-      await bot.editMessageText(
+      await safeEditMessage(chatId, msgId,
         `🎯 *Set 2Captcha API Key*\n\n` +
         `Current: \`${config.CAPTCHA_API_KEY ? config.CAPTCHA_API_KEY.substring(0, 8) + '...' : 'Not set'}\`\n\n` +
         `Kirim API key dengan format:\n\`/setapikey YOUR_API_KEY\`\n\n` +
         `Dapatkan API key di: [2captcha.com](https://2captcha.com)`,
         {
-          chat_id: chatId, message_id: msgId, parse_mode: 'Markdown',
+          parse_mode: 'Markdown',
           disable_web_page_preview: true,
           reply_markup: {
             inline_keyboard: [
@@ -242,13 +254,13 @@ bot.on('callback_query', async (query) => {
         accountCount = accounts.split('\n').filter(l => l.includes(':')).length;
       } catch (e) {}
       
-      await bot.editMessageText(
+      await safeEditMessage(chatId, msgId,
         `📊 *Status*\n\n` +
         `🔄 Running: \`${isGenerating ? 'YES' : 'NO'}\`\n` +
         `📧 Total: \`${accountCount} accounts\`\n` +
         `🎯 2Captcha Key: \`${config.CAPTCHA_API_KEY ? 'Set ✅' : 'Not set ❌'}\`\n` +
         `🌐 Proxy: \`${config.USE_PROXY ? 'ON' : 'OFF'}\``,
-        { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', ...getMainMenu() }
+        { parse_mode: 'Markdown', ...getMainMenu() }
       );
       break;
 
@@ -258,12 +270,12 @@ bot.on('callback_query', async (query) => {
         const lines = accounts.split('\n').filter(l => l.includes(':'));
         const last10 = lines.slice(-10);
         
-        await bot.editMessageText(
+        await safeEditMessage(chatId, msgId,
           last10.length > 0
             ? `📋 *Last 10 Accounts*\n\n\`\`\`\n${last10.join('\n')}\n\`\`\`\nTotal: ${lines.length}`
             : '📋 *No accounts yet*',
           {
-            chat_id: chatId, message_id: msgId, parse_mode: 'Markdown',
+            parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [
                 [{ text: '📥 Download', callback_data: 'download' }],
@@ -273,8 +285,8 @@ bot.on('callback_query', async (query) => {
           }
         );
       } catch (e) {
-        await bot.editMessageText('📋 *No accounts file*', 
-          { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', ...getMainMenu() });
+        await safeEditMessage(chatId, msgId, '📋 *No accounts file*', 
+          { parse_mode: 'Markdown', ...getMainMenu() });
       }
       break;
 
@@ -292,12 +304,13 @@ bot.on('callback_query', async (query) => {
         generatorProcess = null;
       }
       isGenerating = false;
-      await bot.editMessageText('🛑 *Stopped*', 
-        { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', ...getMainMenu() });
+      await safeEditMessage(chatId, msgId, '🛑 *Stopped*', 
+        { parse_mode: 'Markdown', ...getMainMenu() });
+      break;
       break;
 
     case 'help':
-      await bot.editMessageText(
+      await safeEditMessage(chatId, msgId,
         `❓ *Help*\n\n` +
         `*Commands:*\n` +
         `/start - Main menu\n` +
@@ -309,44 +322,46 @@ bot.on('callback_query', async (query) => {
         `2. Set ke IP Authentication\n` +
         `3. Set ke Rotating Proxy Endpoint\n` +
         `4. Copy endpoint: \`p.webshare.io:80\``,
-        { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', ...getMainMenu() }
+        { parse_mode: 'Markdown', ...getMainMenu() }
       );
       break;
 
     case 'back_main':
       const cfg = loadConfig();
-      await bot.editMessageText(
+      await safeEditMessage(chatId, msgId,
         `🔐 *Microsoft Account Creator*\n\n` +
         `🎯 Captcha: \`2Captcha\`\n` +
         `🌐 Proxy: \`${cfg.USE_PROXY ? 'ON' : 'OFF'}\`\n` +
         `📧 Domain: \`${cfg.EMAIL_DOMAIN}\``,
-        { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', ...getMainMenu() }
+        { parse_mode: 'Markdown', ...getMainMenu() }
       );
       break;
   }
-  
-  await bot.answerCallbackQuery(query.id);
+  try {
+    await bot.answerCallbackQuery(query.id);
+  } catch (e) {
+    // Ignore callback answer errors
+  }
 });
-
 // Start generation
 async function startGeneration(chatId, msgId, count) {
   if (isGenerating) {
-    return bot.editMessageText('⚠️ Already running!', {
-      chat_id: chatId, message_id: msgId,
+    return safeEditMessage(chatId, msgId, '⚠️ Already running!', {
       reply_markup: { inline_keyboard: [[{ text: '🛑 Stop', callback_data: 'stop' }]] }
     });
+  }
   }
 
   const config = loadConfig();
   if (!config.CAPTCHA_API_KEY) {
-    return bot.editMessageText('❌ Set 2Captcha API key first!\n\n`/setapikey YOUR_KEY`', 
-      { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', ...getMainMenu() });
+    return safeEditMessage(chatId, msgId, '❌ Set 2Captcha API key first!\n\n`/setapikey YOUR_KEY`', 
+      { parse_mode: 'Markdown', ...getMainMenu() });
   }
 
   isGenerating = true;
   
-  await bot.editMessageText(`🚀 *Generating ${count} accounts...*\n\n⏳ Please wait...`, {
-    chat_id: chatId, message_id: msgId, parse_mode: 'Markdown',
+  await safeEditMessage(chatId, msgId, `🚀 *Generating ${count} accounts...*\n\n⏳ Please wait...`, {
+    parse_mode: 'Markdown',
     reply_markup: { inline_keyboard: [[{ text: '🛑 Stop', callback_data: 'stop' }]] }
   });
 
