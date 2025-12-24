@@ -24,14 +24,15 @@ WIN_NAMES["11ltsc"]="Windows 11 LTSC 2024"
 WIN_NAMES["11iot"]="Windows 11 IoT Enterprise LTSC"
 WIN_NAMES["10pro"]="Windows 10 Pro"
 WIN_NAMES["11pro"]="Windows 11 Pro"
-WIN_NAMES["10atlas"]="Windows 10 Atlas (custom URL)"
-WIN_NAMES["11atlas"]="Windows 11 Atlas (custom URL)"
-WIN_NAMES["tiny10"]="Tiny10 (custom URL)"
-WIN_NAMES["tiny11"]="Tiny11 (custom URL)"
+WIN_NAMES["10atlas"]="Windows 10 Atlas"
+WIN_NAMES["11atlas"]="Windows 11 Atlas"
+WIN_NAMES["tiny10"]="Tiny10 23H1"
+WIN_NAMES["tiny11"]="Tiny11 24H2"
 
-# Built-in ISO URLs from massgrave.dev (verified working direct links)
+# Built-in ISO URLs (verified working direct links)
 declare -A ISO_URLS
-# Windows 10 LTSC 2021 (Enterprise, stable, 10-year support)
+
+# Windows 10 LTSC 2021 (Enterprise, stable, 10-year support) - massgrave.dev
 ISO_URLS["10ltsc"]="https://drive.massgrave.dev/en-us_windows_10_enterprise_ltsc_2021_x64_dvd_d289cf96.iso"
 # Windows 10 IoT Enterprise LTSC 2021 (includes Enterprise + IoT editions)
 ISO_URLS["10iot"]="https://drive.massgrave.dev/en-us_windows_10_iot_enterprise_ltsc_2021_x64_dvd_257ad90f.iso"
@@ -39,18 +40,23 @@ ISO_URLS["10iot"]="https://drive.massgrave.dev/en-us_windows_10_iot_enterprise_l
 ISO_URLS["11ltsc"]="https://drive.massgrave.dev/en-us_windows_11_enterprise_ltsc_2024_x64_dvd_965cfb00.iso"
 # Windows 11 IoT Enterprise LTSC 2024 (no TPM required, 10-year support)
 ISO_URLS["11iot"]="https://drive.massgrave.dev/en-us_windows_11_iot_enterprise_ltsc_2024_x64_dvd_f6b14814.iso"
-# Windows 10/11 Pro - use Microsoft Evaluation (90 days, need MAS activation)
+# Windows 10/11 Pro - Microsoft direct download
 ISO_URLS["10pro"]="https://software.download.prss.microsoft.com/dbazure/Win10_22H2_English_x64v1.iso"
 ISO_URLS["11pro"]="https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso"
 # Server editions from evaluation center
 ISO_URLS["2019"]="eval"
 ISO_URLS["2022"]="eval"
 ISO_URLS["2025"]="eval"
-# Custom ISO required
-ISO_URLS["10atlas"]=""
-ISO_URLS["11atlas"]=""
-ISO_URLS["tiny10"]=""
-ISO_URLS["tiny11"]=""
+
+# Tiny10/11 from archive.org (NTDEV official uploads)
+ISO_URLS["tiny10"]="https://archive.org/download/tiny-10_202301/tiny10%2023h1%20x64.iso"
+ISO_URLS["tiny11"]="https://archive.org/download/tiny-11-24-h-2-x-64-26100.1742/tiny11%2024H2%20x64%20-%2026100.1742.iso"
+
+# Atlas OS - NOTE: Atlas tidak menyediakan ISO!
+# Atlas adalah script untuk modifikasi Windows yang sudah terinstall
+# Gunakan Windows 10/11 LTSC lalu apply Atlas Playbook via AME Wizard
+ISO_URLS["10atlas"]="USE_LTSC_THEN_APPLY_ATLAS"
+ISO_URLS["11atlas"]="USE_LTSC_THEN_APPLY_ATLAS"
 
 # Validate WIN_CODE
 if [ -z "${WIN_NAMES[$WIN_CODE]}" ]; then
@@ -110,19 +116,51 @@ if [ ! -f "$WIN_ISO" ]; then
             }
         fi
     
-    # Priority 2: Built-in URL from massgrave.dev
-    elif [ -n "$BUILTIN_URL" ] && [ "$BUILTIN_URL" != "eval" ]; then
+    # Priority 2: Built-in URL (massgrave.dev, archive.org, etc)
+    elif [ -n "$BUILTIN_URL" ] && [ "$BUILTIN_URL" != "eval" ] && [ "$BUILTIN_URL" != "USE_LTSC_THEN_APPLY_ATLAS" ]; then
         echo "📥 Auto-downloading ${WIN_NAMES[$WIN_CODE]} ISO..."
-        echo "   Source: massgrave.dev (genuine Microsoft ISOs)"
+        
+        if echo "$BUILTIN_URL" | grep -q "massgrave.dev"; then
+            echo "   Source: massgrave.dev (genuine Microsoft ISOs)"
+        elif echo "$BUILTIN_URL" | grep -q "archive.org"; then
+            echo "   Source: archive.org (NTDEV Tiny10/11)"
+        else
+            echo "   Source: $BUILTIN_URL"
+        fi
         echo ""
         
         wget --progress=bar:force -O "$WIN_ISO" "$BUILTIN_URL" || {
-            echo "❌ Gagal download ISO dari massgrave.dev"
+            echo "❌ Gagal download ISO"
             echo "   Coba lagi nanti atau gunakan custom URL"
             exit 1
         }
     
-    # Priority 3: Server evaluation editions (special handling)
+    # Priority 3: Atlas OS - special handling (use LTSC + apply Atlas playbook)
+    elif [ "$BUILTIN_URL" == "USE_LTSC_THEN_APPLY_ATLAS" ]; then
+        echo ""
+        echo "⚠️ ATLAS OS - PERHATIAN!"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "Atlas OS TIDAK menyediakan ISO file!"
+        echo "Atlas adalah script untuk modifikasi Windows yang sudah terinstall."
+        echo ""
+        echo "📝 Cara membuat Atlas Golden Image:"
+        echo ""
+        echo "1. Build golden image dengan Windows 10/11 LTSC dulu:"
+        echo "   bash build_golden_image.sh 10ltsc golden-atlas-base"
+        echo ""
+        echo "2. Setelah build selesai, deploy ke RDP dan login"
+        echo ""
+        echo "3. Di dalam Windows RDP, jalankan Atlas Playbook:"
+        echo "   - Download: https://github.com/Atlas-OS/Atlas/releases"
+        echo "   - Download AME Wizard: https://ameliorated.io/"
+        echo "   - Jalankan AME Wizard dan apply Atlas Playbook"
+        echo ""
+        echo "4. Setelah Atlas terapply, shutdown dan backup image"
+        echo ""
+        exit 1
+    
+    # Priority 4: Server evaluation editions (special handling)
     elif [ "$BUILTIN_URL" == "eval" ]; then
         echo "📥 Downloading Windows Server evaluation ISO..."
         echo "   Note: Evaluation = 180 days trial, use MAS to activate"
@@ -146,7 +184,7 @@ if [ ! -f "$WIN_ISO" ]; then
             exit 1
         }
     
-    # Priority 4: Check GDrive
+    # Priority 5: Check GDrive
     else
         GDRIVE_ISO="gdrive:rdp-isos/${WIN_CODE}.iso"
         echo "🔍 Checking GDrive: $GDRIVE_ISO"
@@ -163,13 +201,7 @@ if [ ! -f "$WIN_ISO" ]; then
         echo ""
         echo "❌ Windows ISO tidak tersedia!"
         echo ""
-        echo "🔧 Untuk ${WIN_NAMES[$WIN_CODE]}, diperlukan custom ISO URL."
-        echo ""
-        echo "📥 Sumber ISO:"
-        echo "   - Atlas OS: https://atlasos.net/"
-        echo "   - Tiny10/11: https://archive.org/details/tiny-10_202301"
-        echo ""
-        echo "🔗 Jalankan ulang dengan:"
+        echo "🔗 Jalankan ulang dengan custom URL:"
         echo "   bash build_golden_image.sh ${WIN_CODE} ${IMAGE_NAME} 'https://direct-download-url.iso'"
         exit 1
     fi

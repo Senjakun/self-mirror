@@ -1064,32 +1064,31 @@ def tumbal_build_golden_menu(call):
 
 <b>Pilih Windows untuk di-build:</b>
 
-✅ <b>AUTO-DOWNLOAD (dari massgrave.dev):</b>
-ISO akan didownload otomatis untuk:
-• Windows 10/11 LTSC, IoT, Pro
-• Windows Server 2019/2022/2025
+✅ <b>AUTO-DOWNLOAD:</b>
+ISO didownload otomatis dari:
+• massgrave.dev (LTSC, IoT, Pro)
+• archive.org (Tiny10/11)
+• Microsoft (Server eval)
 
-🔧 <b>CUSTOM URL NEEDED:</b>
-Atlas, Tiny10/11 - perlu link download manual
+ℹ️ <b>Atlas OS:</b> Perlu setup manual (script, bukan ISO)
 
-⏱ <b>Estimasi build:</b> 30-60 menit
-💾 <b>Output:</b> ~5-10GB compressed"""
+⏱ <b>Estimasi:</b> 30-60 menit"""
 
     markup = types.InlineKeyboardMarkup(row_width=2)
     
     # Windows 10 - AUTO DOWNLOAD
     markup.add(
-        types.InlineKeyboardButton("✅ Win 10 LTSC 2021", callback_data="build_golden:10ltsc"),
-        types.InlineKeyboardButton("✅ Win 10 IoT LTSC", callback_data="build_golden:10iot")
+        types.InlineKeyboardButton("✅ Win 10 LTSC", callback_data="build_golden:10ltsc"),
+        types.InlineKeyboardButton("✅ Win 10 IoT", callback_data="build_golden:10iot")
     )
-    markup.add(types.InlineKeyboardButton("✅ Win 10 Pro 22H2", callback_data="build_golden:10pro"))
+    markup.add(types.InlineKeyboardButton("✅ Win 10 Pro", callback_data="build_golden:10pro"))
     
     # Windows 11 - AUTO DOWNLOAD
     markup.add(
-        types.InlineKeyboardButton("✅ Win 11 LTSC 2024", callback_data="build_golden:11ltsc"),
-        types.InlineKeyboardButton("✅ Win 11 IoT LTSC", callback_data="build_golden:11iot")
+        types.InlineKeyboardButton("✅ Win 11 LTSC", callback_data="build_golden:11ltsc"),
+        types.InlineKeyboardButton("✅ Win 11 IoT", callback_data="build_golden:11iot")
     )
-    markup.add(types.InlineKeyboardButton("✅ Win 11 Pro 24H2", callback_data="build_golden:11pro"))
+    markup.add(types.InlineKeyboardButton("✅ Win 11 Pro", callback_data="build_golden:11pro"))
     
     # Server editions - AUTO DOWNLOAD (eval)
     markup.add(
@@ -1098,14 +1097,15 @@ Atlas, Tiny10/11 - perlu link download manual
     )
     markup.add(types.InlineKeyboardButton("✅ Server 2025", callback_data="build_golden:2025"))
     
-    # Custom URL required
+    # Tiny editions - AUTO DOWNLOAD from archive.org
     markup.add(
-        types.InlineKeyboardButton("🔧 Win 10 Atlas", callback_data="build_golden:10atlas"),
-        types.InlineKeyboardButton("🔧 Win 11 Atlas", callback_data="build_golden:11atlas")
+        types.InlineKeyboardButton("✅ Tiny10 23H1", callback_data="build_golden:tiny10"),
+        types.InlineKeyboardButton("✅ Tiny11 24H2", callback_data="build_golden:tiny11")
     )
+    
+    # Atlas - requires manual setup
     markup.add(
-        types.InlineKeyboardButton("🔧 Tiny10", callback_data="build_golden:tiny10"),
-        types.InlineKeyboardButton("🔧 Tiny11", callback_data="build_golden:tiny11")
+        types.InlineKeyboardButton("ℹ️ Atlas OS (info)", callback_data="build_golden:10atlas")
     )
     
     markup.add(types.InlineKeyboardButton("◀️ Kembali", callback_data="tumbal_menu"))
@@ -1140,15 +1140,51 @@ def ask_iso_url(call):
         "11iot": "Windows 11 IoT Enterprise LTSC",
         "11pro": "Windows 11 Pro 24H2",
         "11atlas": "Windows 11 Atlas",
-        "tiny10": "Tiny10",
-        "tiny11": "Tiny11"
+        "tiny10": "Tiny10 23H1",
+        "tiny11": "Tiny11 24H2"
     }
     
     # Check if this version has built-in URL (auto download)
-    auto_download_versions = ["10ltsc", "10iot", "10pro", "11ltsc", "11iot", "11pro", "2019", "2022", "2025"]
+    # Tiny10/11 now auto-download from archive.org
+    auto_download_versions = ["10ltsc", "10iot", "10pro", "11ltsc", "11iot", "11pro", "2019", "2022", "2025", "tiny10", "tiny11"]
+    # Atlas requires manual setup (not an ISO, it's a script)
+    atlas_versions = ["10atlas", "11atlas"]
     has_auto_download = win_code in auto_download_versions
+    is_atlas = win_code in atlas_versions
     
     win_name = win_names.get(win_code, "Windows")
+    
+    # If Atlas, show info about manual setup
+    if is_atlas:
+        bot.answer_callback_query(call.id, "ℹ️ Atlas memerlukan setup manual")
+        
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("✅ Build Win 10 LTSC (untuk Atlas)", callback_data="build_golden:10ltsc"))
+        markup.add(types.InlineKeyboardButton("✅ Build Win 11 LTSC (untuk Atlas)", callback_data="build_golden:11ltsc"))
+        markup.add(types.InlineKeyboardButton("◀️ Kembali", callback_data="tumbal_build_golden"))
+        
+        text = f"""ℹ️ <b>ATLAS OS - PERHATIAN!</b>
+━━━━━━━━━━━━━━━━━━
+
+Atlas OS <b>TIDAK menyediakan ISO file</b>!
+Atlas adalah <b>script modifikasi</b> untuk Windows yang sudah terinstall.
+
+<b>📝 Cara membuat Atlas Golden Image:</b>
+
+<b>1.</b> Build golden image dengan Windows LTSC dulu
+   (pilih tombol di bawah)
+
+<b>2.</b> Deploy ke RDP dan login
+
+<b>3.</b> Di dalam Windows, apply Atlas Playbook:
+   • Download Atlas: https://atlasos.net/
+   • Download AME Wizard: https://ameliorated.io/
+   • Jalankan AME Wizard, apply Atlas Playbook
+
+<b>4.</b> Setelah selesai, shutdown dan backup image"""
+        
+        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
+        return
     
     # If auto-download available, skip GDrive check and go directly to confirmation
     if has_auto_download:
@@ -1160,14 +1196,21 @@ def ask_iso_url(call):
             types.InlineKeyboardButton("❌ Batal", callback_data="tumbal_build_golden")
         )
         
+        # Determine source for display
+        if win_code.startswith("tiny"):
+            source_info = "archive.org (NTDEV)"
+        elif win_code.startswith("20"):
+            source_info = "Microsoft Evaluation Center"
+        else:
+            source_info = "massgrave.dev (genuine MS ISOs)"
+        
         text = f"""✅ <b>READY TO BUILD (AUTO-DOWNLOAD)</b>
 ━━━━━━━━━━━━━━━━━━
 
 🪟 <b>Windows:</b> {win_name}
 📍 <b>VPS:</b> {tumbal['name']} ({tumbal['ip']})
 
-📥 <b>ISO akan didownload otomatis</b>
-   dari massgrave.dev (genuine Microsoft ISOs)
+📥 <b>ISO Source:</b> {source_info}
 
 ⏱ <b>Estimasi:</b>
    • Download ISO: 5-15 menit
@@ -1275,8 +1318,8 @@ def confirm_build_from_gdrive(call):
         "11iot": "Windows 11 IoT Enterprise LTSC",
         "11pro": "Windows 11 Pro 24H2",
         "11atlas": "Windows 11 Atlas",
-        "tiny10": "Tiny10",
-        "tiny11": "Tiny11"
+        "tiny10": "Tiny10 23H1",
+        "tiny11": "Tiny11 24H2"
     }
     win_name = win_names.get(win_code, "Windows")
     image_name = f"golden-{win_code}"
@@ -1290,8 +1333,12 @@ def start_golden_build(chat_id, tumbal, win_code, win_name, image_name, iso_url)
     name = tumbal["name"]
     
     # Determine ISO source for display
-    auto_download_versions = ["10ltsc", "10iot", "10pro", "11ltsc", "11iot", "11pro", "2019", "2022", "2025"]
-    if win_code in auto_download_versions:
+    auto_download_versions = ["10ltsc", "10iot", "10pro", "11ltsc", "11iot", "11pro", "2019", "2022", "2025", "tiny10", "tiny11"]
+    if win_code in ["tiny10", "tiny11"]:
+        iso_source = "Auto-download (archive.org)"
+    elif win_code in ["2019", "2022", "2025"]:
+        iso_source = "Auto-download (MS Eval Center)"
+    elif win_code in auto_download_versions:
         iso_source = "Auto-download (massgrave.dev)"
     elif iso_url:
         iso_source = iso_url[:50] + "..." if len(iso_url) > 50 else iso_url
