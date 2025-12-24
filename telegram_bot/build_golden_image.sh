@@ -9,12 +9,23 @@ IMAGE_NAME=${2:-"win10-golden"}
 WORK_DIR="/root/golden-build"
 OUTPUT_DIR="/root/rdp-images"
 
-# Windows versions
+# Windows versions - mapped to dockurr/windows image tags and ISOs
 declare -A WIN_URLS
-WIN_URLS["10"]="https://archive.org/download/windows-10-ltsc-2021-x64/Win10_LTSC_2021_x64.iso"
-WIN_URLS["11"]="https://archive.org/download/windows-11-pro-x64/Win11_Pro_x64.iso"
+# Server editions
+WIN_URLS["2012r2"]="https://archive.org/download/windows-server-2012-r2/WinServer2012R2.iso"
+WIN_URLS["2016"]="https://archive.org/download/windows-server-2016/WinServer2016.iso"
 WIN_URLS["2019"]="https://archive.org/download/windows-server-2019/WinServer2019.iso"
 WIN_URLS["2022"]="https://archive.org/download/windows-server-2022/WinServer2022.iso"
+WIN_URLS["2025"]="https://archive.org/download/windows-server-2025/WinServer2025.iso"
+# Windows 10 editions
+WIN_URLS["10pro"]="https://archive.org/download/windows-10-pro-x64/Win10_Pro_x64.iso"
+WIN_URLS["10lite"]="https://archive.org/download/windows-10-superlite/Win10_SuperLite_x64.iso"
+WIN_URLS["10atlas"]="https://archive.org/download/windows-10-atlas/Win10_Atlas_x64.iso"
+# Windows 11 editions
+WIN_URLS["11pro"]="https://archive.org/download/windows-11-pro-x64/Win11_Pro_x64.iso"
+WIN_URLS["11lite"]="https://archive.org/download/windows-11-superlite/Win11_SuperLite_x64.iso"
+WIN_URLS["11atlas"]="https://archive.org/download/windows-11-atlas/Win11_Atlas_x64.iso"
+# Tiny editions (lightweight)
 WIN_URLS["tiny10"]="https://archive.org/download/tiny10-23h2/tiny10_x64_23h2.iso"
 WIN_URLS["tiny11"]="https://archive.org/download/tiny11-23h2/tiny11_x64_23h2.iso"
 
@@ -53,7 +64,7 @@ if [ ! -f "$WIN_ISO" ]; then
     WIN_URL="${WIN_URLS[$WIN_CODE]}"
     if [ -z "$WIN_URL" ]; then
         echo "❌ WIN_CODE tidak valid: $WIN_CODE"
-        echo "Pilihan: 10, 11, 2019, 2022, tiny10, tiny11"
+        echo "Pilihan: 2012r2, 2016, 2019, 2022, 2025, 10pro, 10lite, 10atlas, 11pro, 11lite, 11atlas, tiny10, tiny11"
         exit 1
     fi
     

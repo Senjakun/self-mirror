@@ -1073,13 +1073,34 @@ Golden Image adalah Windows yang sudah:
 ⏱ <b>Estimasi build:</b> 30-60 menit
 💾 <b>Output:</b> ~5-10GB compressed"""
 
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("🪟 Windows 10", callback_data="build_golden:10"))
-    markup.add(types.InlineKeyboardButton("🪟 Windows 11", callback_data="build_golden:11"))
-    markup.add(types.InlineKeyboardButton("🖥 Server 2019", callback_data="build_golden:2019"))
-    markup.add(types.InlineKeyboardButton("🖥 Server 2022", callback_data="build_golden:2022"))
-    markup.add(types.InlineKeyboardButton("⚡ Tiny10 (Light)", callback_data="build_golden:tiny10"))
-    markup.add(types.InlineKeyboardButton("⚡ Tiny11 (Light)", callback_data="build_golden:tiny11"))
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    # Server editions
+    markup.add(
+        types.InlineKeyboardButton("🖥 Server 2012 R2", callback_data="build_golden:2012r2"),
+        types.InlineKeyboardButton("🖥 Server 2016", callback_data="build_golden:2016")
+    )
+    markup.add(
+        types.InlineKeyboardButton("🖥 Server 2019", callback_data="build_golden:2019"),
+        types.InlineKeyboardButton("🖥 Server 2022", callback_data="build_golden:2022")
+    )
+    markup.add(types.InlineKeyboardButton("🖥 Server 2025", callback_data="build_golden:2025"))
+    # Windows 10 editions
+    markup.add(
+        types.InlineKeyboardButton("🪟 Win 10 Pro", callback_data="build_golden:10pro"),
+        types.InlineKeyboardButton("🪟 Win 10 SuperLite", callback_data="build_golden:10lite")
+    )
+    markup.add(types.InlineKeyboardButton("🪟 Win 10 Atlas", callback_data="build_golden:10atlas"))
+    # Windows 11 editions
+    markup.add(
+        types.InlineKeyboardButton("🪟 Win 11 Pro", callback_data="build_golden:11pro"),
+        types.InlineKeyboardButton("🪟 Win 11 SuperLite", callback_data="build_golden:11lite")
+    )
+    markup.add(types.InlineKeyboardButton("🪟 Win 11 Atlas", callback_data="build_golden:11atlas"))
+    # Tiny editions
+    markup.add(
+        types.InlineKeyboardButton("⚡ Tiny10 23H2", callback_data="build_golden:tiny10"),
+        types.InlineKeyboardButton("⚡ Tiny11 23H2", callback_data="build_golden:tiny11")
+    )
     markup.add(types.InlineKeyboardButton("◀️ Kembali", callback_data="tumbal_menu"))
 
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
@@ -1098,10 +1119,17 @@ def start_build_golden(call):
 
     win_code = call.data.replace("build_golden:", "")
     win_names = {
-        "10": "Windows 10",
-        "11": "Windows 11", 
+        "2012r2": "Windows Server 2012 R2",
+        "2016": "Windows Server 2016",
         "2019": "Windows Server 2019",
         "2022": "Windows Server 2022",
+        "2025": "Windows Server 2025",
+        "10pro": "Windows 10 Pro",
+        "10lite": "Windows 10 SuperLite",
+        "10atlas": "Windows 10 Atlas",
+        "11pro": "Windows 11 Pro",
+        "11lite": "Windows 11 SuperLite",
+        "11atlas": "Windows 11 Atlas",
         "tiny10": "Tiny10 23H2",
         "tiny11": "Tiny11 23H2"
     }
