@@ -132,10 +132,10 @@ bot.on('callback_query', async (query) => {
       await bot.editMessageText(
         `🌐 *Webshare.io Proxy*\n\n` +
         `Status: \`${config.USE_PROXY ? 'ON' : 'OFF'}\`\n` +
-        `IP: \`${config.PROXY_IP || 'Not set'}\`\n` +
-        `Port: \`${config.PROXY_PORT || 'Not set'}\`\n` +
-        `User: \`${config.PROXY_USERNAME || 'Not set'}\`\n\n` +
-        `Set proxy dengan:\n\`/setproxy user:pass@ip:port\``,
+        `Mode: \`Rotating Proxy (IP Auth)\`\n` +
+        `Endpoint: \`${config.ROTATING_PROXY || 'Not set'}\`\n\n` +
+        `Set proxy dengan:\n\`/setproxy endpoint:port\`\n` +
+        `Contoh: \`/setproxy p.webshare.io:80\``,
         {
           chat_id: chatId, message_id: msgId, parse_mode: 'Markdown',
           reply_markup: {
@@ -249,10 +249,13 @@ bot.on('callback_query', async (query) => {
         `*Commands:*\n` +
         `/start - Main menu\n` +
         `/setapikey KEY - Set 2Captcha API key\n` +
-        `/setproxy user:pass@ip:port - Set Webshare proxy\n` +
+        `/setproxy endpoint:port - Set rotating proxy\n` +
         `/balance - Check 2Captcha balance\n\n` +
-        `*Webshare.io Format:*\n` +
-        `\`user-country:pass@proxy.webshare.io:80\``,
+        `*Webshare Rotating Proxy:*\n` +
+        `1. Whitelist VPS IP di Webshare\n` +
+        `2. Set ke IP Authentication\n` +
+        `3. Set ke Rotating Proxy Endpoint\n` +
+        `4. Copy endpoint: \`p.webshare.io:80\``,
         { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', ...getMainMenu() }
       );
       break;
@@ -334,34 +337,23 @@ bot.onText(/\/setapikey (.+)/, (msg, match) => {
     { parse_mode: 'Markdown' });
 });
 
-// /setproxy (Webshare format: user:pass@ip:port)
+// /setproxy (Rotating proxy format: endpoint:port)
 bot.onText(/\/setproxy (.+)/, (msg, match) => {
   if (!isAdmin(msg.from.id)) return;
   
   const proxy = match[1].trim();
   const config = loadConfig();
   
-  if (proxy.includes('@')) {
-    const [auth, addr] = proxy.split('@');
-    const [user, pass] = auth.split(':');
-    const [ip, port] = addr.split(':');
-    config.PROXY_USERNAME = user;
-    config.PROXY_PASSWORD = pass;
-    config.PROXY_IP = ip;
-    config.PROXY_PORT = port;
-  } else {
-    const [ip, port] = proxy.split(':');
-    config.PROXY_IP = ip;
-    config.PROXY_PORT = port;
-  }
-  
+  // New format: just endpoint:port for rotating proxy with IP auth
+  config.ROTATING_PROXY = proxy;
   config.USE_PROXY = true;
   saveConfig(config);
   
   bot.sendMessage(msg.chat.id, 
-    `✅ Webshare proxy configured!\n\n` +
-    `🌐 \`${config.PROXY_IP}:${config.PROXY_PORT}\`\n` +
-    `👤 \`${config.PROXY_USERNAME || 'No auth'}\``,
+    `✅ Rotating proxy configured!\n\n` +
+    `🌐 Endpoint: \`${proxy}\`\n` +
+    `🔐 Auth: IP Authentication\n\n` +
+    `⚠️ Pastikan IP VPS sudah di-whitelist di Webshare!`,
     { parse_mode: 'Markdown' }
   );
 });
