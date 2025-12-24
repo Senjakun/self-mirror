@@ -8,16 +8,15 @@ module.exports = {
   CAPTCHA_API_KEY: '', // Your 2Captcha API key
   FUNCAPTCHA_SITE_KEY: 'B7D8911C-5CC8-A9A3-35B0-554ACEE604DA',
   
-  // Webshare.io Proxy Settings
-  // Authentication: IP Authentication (whitelist your server IP in Webshare dashboard)
-  // Connection: Rotating Proxy Endpoint (auto-rotates IP each request)
+  // Webshare.io Rotating Proxy Settings
   USE_PROXY: true,
   PROXY_TYPE: 'http',
   
-  // Rotating Proxy Endpoint from Webshare
-  // Go to Proxy Settings > Get rotating endpoint
-  // Format: p.webshare.io:80 (or proxy.webshare.io:80)
-  ROTATING_PROXY: 'p.webshare.io:80',
+  // Rotating Proxy with Username/Password Auth
+  PROXY_HOST: 'p.webshare.io',
+  PROXY_PORT: '80',
+  PROXY_USERNAME: '', // e.g., nyrtjgvw-rotate
+  PROXY_PASSWORD: '', // e.g., q9s13xivatsv
   
   // File Paths
   NAMES_FILE: 'src/Utils/names.txt',
