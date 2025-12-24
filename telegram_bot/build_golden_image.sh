@@ -3,6 +3,9 @@
 # Build Golden Image Script
 # Jalankan di VPS Tumbal untuk membuat golden image Windows
 # Usage: bash build_golden_image.sh [WIN_CODE] [IMAGE_NAME] [CUSTOM_ISO_URL]
+# 
+# Now with BUILT-IN ISO URLs from massgrave.dev!
+# No more manual ISO hunting for standard Windows versions
 
 WIN_CODE=${1:-"10"}
 IMAGE_NAME=${2:-"win10-golden"}
@@ -10,40 +13,59 @@ CUSTOM_ISO_URL=${3:-""}
 WORK_DIR="/root/golden-build"
 OUTPUT_DIR="/root/rdp-images"
 
-# Windows versions - using dockurr/windows docker image tags
-# These are just identifiers, actual ISOs need custom URL or local file
+# Windows versions
 declare -A WIN_NAMES
-WIN_NAMES["2012r2"]="Windows Server 2012 R2"
-WIN_NAMES["2016"]="Windows Server 2016"
 WIN_NAMES["2019"]="Windows Server 2019"
 WIN_NAMES["2022"]="Windows Server 2022"
 WIN_NAMES["2025"]="Windows Server 2025"
+WIN_NAMES["10ltsc"]="Windows 10 LTSC 2021"
+WIN_NAMES["10iot"]="Windows 10 IoT Enterprise LTSC"
+WIN_NAMES["11ltsc"]="Windows 11 LTSC 2024"
+WIN_NAMES["11iot"]="Windows 11 IoT Enterprise LTSC"
 WIN_NAMES["10pro"]="Windows 10 Pro"
-WIN_NAMES["10lite"]="Windows 10 SuperLite"
-WIN_NAMES["10atlas"]="Windows 10 Atlas"
 WIN_NAMES["11pro"]="Windows 11 Pro"
-WIN_NAMES["11lite"]="Windows 11 SuperLite"
-WIN_NAMES["11atlas"]="Windows 11 Atlas"
-WIN_NAMES["tiny10"]="Tiny10"
-WIN_NAMES["tiny11"]="Tiny11"
+WIN_NAMES["10atlas"]="Windows 10 Atlas (custom URL)"
+WIN_NAMES["11atlas"]="Windows 11 Atlas (custom URL)"
+WIN_NAMES["tiny10"]="Tiny10 (custom URL)"
+WIN_NAMES["tiny11"]="Tiny11 (custom URL)"
 
-# Virtio drivers
-VIRTIO_URL="https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso"
-
-echo "================================================"
-echo "🏗️ BUILD GOLDEN IMAGE"
-echo "================================================"
-echo "📦 Windows: ${WIN_NAMES[$WIN_CODE]:-$WIN_CODE}"
-echo "📁 Output: $OUTPUT_DIR/${IMAGE_NAME}.img"
-if [ -n "$CUSTOM_ISO_URL" ]; then
-    echo "🔗 Custom ISO: $CUSTOM_ISO_URL"
-fi
-echo "================================================"
+# Built-in ISO URLs from massgrave.dev (verified working direct links)
+declare -A ISO_URLS
+# Windows 10 LTSC 2021 (Enterprise, stable, 10-year support)
+ISO_URLS["10ltsc"]="https://drive.massgrave.dev/en-us_windows_10_enterprise_ltsc_2021_x64_dvd_d289cf96.iso"
+# Windows 10 IoT Enterprise LTSC 2021 (includes Enterprise + IoT editions)
+ISO_URLS["10iot"]="https://drive.massgrave.dev/en-us_windows_10_iot_enterprise_ltsc_2021_x64_dvd_257ad90f.iso"
+# Windows 11 LTSC 2024 (Enterprise, latest)
+ISO_URLS["11ltsc"]="https://drive.massgrave.dev/en-us_windows_11_enterprise_ltsc_2024_x64_dvd_965cfb00.iso"
+# Windows 11 IoT Enterprise LTSC 2024 (no TPM required, 10-year support)
+ISO_URLS["11iot"]="https://drive.massgrave.dev/en-us_windows_11_iot_enterprise_ltsc_2024_x64_dvd_f6b14814.iso"
+# Windows 10/11 Pro - use Microsoft Evaluation (90 days, need MAS activation)
+ISO_URLS["10pro"]="https://software.download.prss.microsoft.com/dbazure/Win10_22H2_English_x64v1.iso"
+ISO_URLS["11pro"]="https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso"
+# Server editions from evaluation center
+ISO_URLS["2019"]="eval"
+ISO_URLS["2022"]="eval"
+ISO_URLS["2025"]="eval"
+# Custom ISO required
+ISO_URLS["10atlas"]=""
+ISO_URLS["11atlas"]=""
+ISO_URLS["tiny10"]=""
+ISO_URLS["tiny11"]=""
 
 # Validate WIN_CODE
 if [ -z "${WIN_NAMES[$WIN_CODE]}" ]; then
     echo "❌ WIN_CODE tidak valid: $WIN_CODE"
-    echo "Pilihan: 2012r2, 2016, 2019, 2022, 2025, 10pro, 10lite, 10atlas, 11pro, 11lite, 11atlas, tiny10, tiny11"
+    echo ""
+    echo "📦 Tersedia dengan AUTO-DOWNLOAD (dari massgrave.dev):"
+    echo "   10ltsc  - Windows 10 LTSC 2021 (Recommended!)"
+    echo "   10iot   - Windows 10 IoT Enterprise LTSC"
+    echo "   11ltsc  - Windows 11 LTSC 2024"
+    echo "   11iot   - Windows 11 IoT Enterprise LTSC (no TPM)"
+    echo "   10pro   - Windows 10 Pro 22H2"
+    echo "   11pro   - Windows 11 Pro 24H2"
+    echo ""
+    echo "🔧 Perlu Custom ISO URL:"
+    echo "   10atlas, 11atlas, tiny10, tiny11"
     exit 1
 fi
 
@@ -69,51 +91,89 @@ cd "$WORK_DIR"
 # Download Windows ISO
 WIN_ISO="$WORK_DIR/windows.iso"
 if [ ! -f "$WIN_ISO" ]; then
-    # Method 1: Check GDrive first
-    GDRIVE_ISO="gdrive:rdp-isos/${WIN_CODE}.iso"
-    echo "🔍 Checking GDrive for ISO: $GDRIVE_ISO"
     
-    if rclone lsf "$GDRIVE_ISO" 2>/dev/null | grep -q ".iso"; then
-        echo "✅ Found ISO in GDrive, downloading..."
-        rclone copy "$GDRIVE_ISO" "$WORK_DIR/" --progress
-        mv "$WORK_DIR/${WIN_CODE}.iso" "$WIN_ISO" 2>/dev/null || true
-    fi
+    # Get built-in URL if available
+    BUILTIN_URL="${ISO_URLS[$WIN_CODE]}"
     
-    # Method 2: Custom URL provided
-    if [ ! -f "$WIN_ISO" ] && [ -n "$CUSTOM_ISO_URL" ]; then
-        echo "📥 Downloading Windows ISO from custom URL..."
+    # Priority 1: Custom URL provided via argument
+    if [ -n "$CUSTOM_ISO_URL" ]; then
+        echo "📥 Using custom ISO URL..."
         
-        # Check if it's a GDrive link
-        if echo "$CUSTOM_ISO_URL" | grep -q "drive.google.com\|gdrive:"; then
-            if echo "$CUSTOM_ISO_URL" | grep -q "gdrive:"; then
-                rclone copy "$CUSTOM_ISO_URL" "$WORK_DIR/" --progress
-                # Rename to windows.iso
-                find "$WORK_DIR" -name "*.iso" -exec mv {} "$WIN_ISO" \; 2>/dev/null
-            else
-                echo "❌ Google Drive web link tidak didukung!"
-                echo "   Gunakan format: gdrive:folder/file.iso"
-                echo "   Atau upload ke folder rdp-isos/ di GDrive"
-                exit 1
-            fi
+        if echo "$CUSTOM_ISO_URL" | grep -q "gdrive:"; then
+            echo "   Downloading from GDrive..."
+            rclone copy "$CUSTOM_ISO_URL" "$WORK_DIR/" --progress
+            find "$WORK_DIR" -name "*.iso" -exec mv {} "$WIN_ISO" \; 2>/dev/null
         else
-            wget -q --show-progress -O "$WIN_ISO" "$CUSTOM_ISO_URL"
+            wget --progress=bar:force -O "$WIN_ISO" "$CUSTOM_ISO_URL" || {
+                echo "❌ Gagal download dari: $CUSTOM_ISO_URL"
+                exit 1
+            }
+        fi
+    
+    # Priority 2: Built-in URL from massgrave.dev
+    elif [ -n "$BUILTIN_URL" ] && [ "$BUILTIN_URL" != "eval" ]; then
+        echo "📥 Auto-downloading ${WIN_NAMES[$WIN_CODE]} ISO..."
+        echo "   Source: massgrave.dev (genuine Microsoft ISOs)"
+        echo ""
+        
+        wget --progress=bar:force -O "$WIN_ISO" "$BUILTIN_URL" || {
+            echo "❌ Gagal download ISO dari massgrave.dev"
+            echo "   Coba lagi nanti atau gunakan custom URL"
+            exit 1
+        }
+    
+    # Priority 3: Server evaluation editions (special handling)
+    elif [ "$BUILTIN_URL" == "eval" ]; then
+        echo "📥 Downloading Windows Server evaluation ISO..."
+        echo "   Note: Evaluation = 180 days trial, use MAS to activate"
+        echo ""
+        
+        case "$WIN_CODE" in
+            "2019")
+                EVAL_URL="https://go.microsoft.com/fwlink/p/?linkid=2195167&clcid=0x409&culture=en-us&country=us"
+                ;;
+            "2022")
+                EVAL_URL="https://go.microsoft.com/fwlink/p/?linkid=2195280&clcid=0x409&culture=en-us&country=us"
+                ;;
+            "2025")
+                EVAL_URL="https://go.microsoft.com/fwlink/p/?linkid=2293205&clcid=0x409&culture=en-us&country=us"
+                ;;
+        esac
+        
+        wget --progress=bar:force -O "$WIN_ISO" "$EVAL_URL" || {
+            echo "❌ Gagal download Server evaluation ISO"
+            echo "   Microsoft mungkin mengubah link, coba custom URL"
+            exit 1
+        }
+    
+    # Priority 4: Check GDrive
+    else
+        GDRIVE_ISO="gdrive:rdp-isos/${WIN_CODE}.iso"
+        echo "🔍 Checking GDrive: $GDRIVE_ISO"
+        
+        if rclone lsf "$GDRIVE_ISO" 2>/dev/null | grep -q ".iso"; then
+            echo "✅ Found in GDrive, downloading..."
+            rclone copy "$GDRIVE_ISO" "$WORK_DIR/" --progress
+            mv "$WORK_DIR/${WIN_CODE}.iso" "$WIN_ISO" 2>/dev/null || true
         fi
     fi
     
-    # Check if we got the ISO
+    # Final check
     if [ ! -f "$WIN_ISO" ] || [ ! -s "$WIN_ISO" ]; then
-        echo "❌ Windows ISO tidak ditemukan!"
         echo ""
-        echo "📤 Upload ISO ke GDrive dengan nama: ${WIN_CODE}.iso"
-        echo "   Folder: gdrive:rdp-isos/"
+        echo "❌ Windows ISO tidak tersedia!"
         echo ""
-        echo "   Contoh:"
-        echo "   rclone copy /path/to/windows10atlas.iso gdrive:rdp-isos/${WIN_CODE}.iso"
+        echo "🔧 Untuk ${WIN_NAMES[$WIN_CODE]}, diperlukan custom ISO URL."
         echo ""
-        echo "🔗 Atau jalankan ulang dengan URL:"
-        echo "   bash build_golden_image.sh ${WIN_CODE} ${IMAGE_NAME} 'https://..../file.iso'"
+        echo "📥 Sumber ISO:"
+        echo "   - Atlas OS: https://atlasos.net/"
+        echo "   - Tiny10/11: https://archive.org/details/tiny-10_202301"
+        echo ""
+        echo "🔗 Jalankan ulang dengan:"
+        echo "   bash build_golden_image.sh ${WIN_CODE} ${IMAGE_NAME} 'https://direct-download-url.iso'"
         exit 1
     fi
+    
     echo "✅ Windows ISO ready: $(du -h "$WIN_ISO" | cut -f1)"
 fi
 

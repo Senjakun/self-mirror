@@ -1064,45 +1064,50 @@ def tumbal_build_golden_menu(call):
 
 <b>Pilih Windows untuk di-build:</b>
 
-✅ <b>Otomatis cek ISO di GDrive:</b>
-   <code>gdrive:rdp-isos/[WIN_CODE].iso</code>
+✅ <b>AUTO-DOWNLOAD (dari massgrave.dev):</b>
+ISO akan didownload otomatis untuk:
+• Windows 10/11 LTSC, IoT, Pro
+• Windows Server 2019/2022/2025
 
-📤 <b>Cara upload ISO ke GDrive:</b>
-<code>rclone copy /path/to/win10.iso gdrive:rdp-isos/10atlas.iso</code>
-
-Kalau ISO belum ada di GDrive, bot akan minta link download.
+🔧 <b>CUSTOM URL NEEDED:</b>
+Atlas, Tiny10/11 - perlu link download manual
 
 ⏱ <b>Estimasi build:</b> 30-60 menit
 💾 <b>Output:</b> ~5-10GB compressed"""
 
     markup = types.InlineKeyboardMarkup(row_width=2)
-    # Server editions
+    
+    # Windows 10 - AUTO DOWNLOAD
     markup.add(
-        types.InlineKeyboardButton("🖥 Server 2012 R2", callback_data="build_golden:2012r2"),
-        types.InlineKeyboardButton("🖥 Server 2016", callback_data="build_golden:2016")
+        types.InlineKeyboardButton("✅ Win 10 LTSC 2021", callback_data="build_golden:10ltsc"),
+        types.InlineKeyboardButton("✅ Win 10 IoT LTSC", callback_data="build_golden:10iot")
+    )
+    markup.add(types.InlineKeyboardButton("✅ Win 10 Pro 22H2", callback_data="build_golden:10pro"))
+    
+    # Windows 11 - AUTO DOWNLOAD
+    markup.add(
+        types.InlineKeyboardButton("✅ Win 11 LTSC 2024", callback_data="build_golden:11ltsc"),
+        types.InlineKeyboardButton("✅ Win 11 IoT LTSC", callback_data="build_golden:11iot")
+    )
+    markup.add(types.InlineKeyboardButton("✅ Win 11 Pro 24H2", callback_data="build_golden:11pro"))
+    
+    # Server editions - AUTO DOWNLOAD (eval)
+    markup.add(
+        types.InlineKeyboardButton("✅ Server 2019", callback_data="build_golden:2019"),
+        types.InlineKeyboardButton("✅ Server 2022", callback_data="build_golden:2022")
+    )
+    markup.add(types.InlineKeyboardButton("✅ Server 2025", callback_data="build_golden:2025"))
+    
+    # Custom URL required
+    markup.add(
+        types.InlineKeyboardButton("🔧 Win 10 Atlas", callback_data="build_golden:10atlas"),
+        types.InlineKeyboardButton("🔧 Win 11 Atlas", callback_data="build_golden:11atlas")
     )
     markup.add(
-        types.InlineKeyboardButton("🖥 Server 2019", callback_data="build_golden:2019"),
-        types.InlineKeyboardButton("🖥 Server 2022", callback_data="build_golden:2022")
+        types.InlineKeyboardButton("🔧 Tiny10", callback_data="build_golden:tiny10"),
+        types.InlineKeyboardButton("🔧 Tiny11", callback_data="build_golden:tiny11")
     )
-    markup.add(types.InlineKeyboardButton("🖥 Server 2025", callback_data="build_golden:2025"))
-    # Windows 10 editions
-    markup.add(
-        types.InlineKeyboardButton("🪟 Win 10 Pro", callback_data="build_golden:10pro"),
-        types.InlineKeyboardButton("🪟 Win 10 SuperLite", callback_data="build_golden:10lite")
-    )
-    markup.add(types.InlineKeyboardButton("🪟 Win 10 Atlas", callback_data="build_golden:10atlas"))
-    # Windows 11 editions
-    markup.add(
-        types.InlineKeyboardButton("🪟 Win 11 Pro", callback_data="build_golden:11pro"),
-        types.InlineKeyboardButton("🪟 Win 11 SuperLite", callback_data="build_golden:11lite")
-    )
-    markup.add(types.InlineKeyboardButton("🪟 Win 11 Atlas", callback_data="build_golden:11atlas"))
-    # Tiny editions
-    markup.add(
-        types.InlineKeyboardButton("⚡ Tiny10 23H2", callback_data="build_golden:tiny10"),
-        types.InlineKeyboardButton("⚡ Tiny11 23H2", callback_data="build_golden:tiny11")
-    )
+    
     markup.add(types.InlineKeyboardButton("◀️ Kembali", callback_data="tumbal_menu"))
 
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
@@ -1124,23 +1129,56 @@ def ask_iso_url(call):
 
     win_code = call.data.replace("build_golden:", "")
     win_names = {
-        "2012r2": "Windows Server 2012 R2",
-        "2016": "Windows Server 2016",
         "2019": "Windows Server 2019",
         "2022": "Windows Server 2022",
         "2025": "Windows Server 2025",
-        "10pro": "Windows 10 Pro",
-        "10lite": "Windows 10 SuperLite",
+        "10ltsc": "Windows 10 LTSC 2021",
+        "10iot": "Windows 10 IoT Enterprise LTSC",
+        "10pro": "Windows 10 Pro 22H2",
         "10atlas": "Windows 10 Atlas",
-        "11pro": "Windows 11 Pro",
-        "11lite": "Windows 11 SuperLite",
+        "11ltsc": "Windows 11 LTSC 2024",
+        "11iot": "Windows 11 IoT Enterprise LTSC",
+        "11pro": "Windows 11 Pro 24H2",
         "11atlas": "Windows 11 Atlas",
-        "tiny10": "Tiny10 23H2",
-        "tiny11": "Tiny11 23H2"
+        "tiny10": "Tiny10",
+        "tiny11": "Tiny11"
     }
+    
+    # Check if this version has built-in URL (auto download)
+    auto_download_versions = ["10ltsc", "10iot", "10pro", "11ltsc", "11iot", "11pro", "2019", "2022", "2025"]
+    has_auto_download = win_code in auto_download_versions
+    
     win_name = win_names.get(win_code, "Windows")
     
-    # Cek apakah ISO sudah ada di GDrive
+    # If auto-download available, skip GDrive check and go directly to confirmation
+    if has_auto_download:
+        bot.answer_callback_query(call.id, f"✅ ISO akan di-download otomatis!")
+        
+        markup = types.InlineKeyboardMarkup()
+        markup.add(
+            types.InlineKeyboardButton("✅ Mulai Build", callback_data=f"confirm_build:{win_code}:auto"),
+            types.InlineKeyboardButton("❌ Batal", callback_data="tumbal_build_golden")
+        )
+        
+        text = f"""✅ <b>READY TO BUILD (AUTO-DOWNLOAD)</b>
+━━━━━━━━━━━━━━━━━━
+
+🪟 <b>Windows:</b> {win_name}
+📍 <b>VPS:</b> {tumbal['name']} ({tumbal['ip']})
+
+📥 <b>ISO akan didownload otomatis</b>
+   dari massgrave.dev (genuine Microsoft ISOs)
+
+⏱ <b>Estimasi:</b>
+   • Download ISO: 5-15 menit
+   • Build image: 20-40 menit
+
+Klik tombol di bawah untuk mulai build."""
+        
+        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
+        return
+    
+    # For custom URL versions, check GDrive first
     bot.answer_callback_query(call.id, f"🔍 Cek ISO di GDrive...")
     
     ip = tumbal["ip"]
@@ -1176,29 +1214,30 @@ Klik tombol di bawah untuk mulai build."""
         
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
     else:
-        # ISO tidak ada, minta URL atau instruksi upload
+        # ISO tidak ada, minta URL
         pending_builds[call.from_user.id] = {
             "win_code": win_code,
             "win_name": win_name,
             "tumbal": tumbal
         }
         
-        text = f"""📤 <b>ISO BELUM ADA DI GDRIVE</b>
+        text = f"""🔧 <b>CUSTOM ISO REQUIRED</b>
 ━━━━━━━━━━━━━━━━━━
 
 🪟 <b>Windows:</b> {win_name}
 📍 <b>VPS:</b> {tumbal['name']} ({tumbal['ip']})
 
-<b>Opsi 1 - Upload ISO ke GDrive (Rekomendasi):</b>
-<code>rclone copy /path/to/file.iso gdrive:rdp-isos/{win_code}.iso</code>
+{win_name} memerlukan ISO dari sumber khusus.
 
-Lalu kembali ke menu dan pilih lagi.
+<b>📥 Download dari:</b>
+• Atlas OS: https://atlasos.net/
+• Tiny10/11: https://archive.org/details/tiny-10_202301
 
-<b>Opsi 2 - Kirim direct link ISO:</b>
-Balas pesan ini dengan URL wget langsung.
+<b>📤 Upload ke GDrive:</b>
+<code>rclone copy file.iso gdrive:rdp-isos/{win_code}.iso</code>
 
-<b>Contoh:</b>
-<code>https://dl.bobpony.com/windows/10/tiny10.iso</code>
+<b>Atau kirim direct link wget:</b>
+Balas pesan ini dengan URL langsung.
 
 Ketik /cancel untuk membatalkan."""
 
@@ -1225,19 +1264,19 @@ def confirm_build_from_gdrive(call):
         return
     
     win_names = {
-        "2012r2": "Windows Server 2012 R2",
-        "2016": "Windows Server 2016",
         "2019": "Windows Server 2019",
         "2022": "Windows Server 2022",
         "2025": "Windows Server 2025",
-        "10pro": "Windows 10 Pro",
-        "10lite": "Windows 10 SuperLite",
+        "10ltsc": "Windows 10 LTSC 2021",
+        "10iot": "Windows 10 IoT Enterprise LTSC",
+        "10pro": "Windows 10 Pro 22H2",
         "10atlas": "Windows 10 Atlas",
-        "11pro": "Windows 11 Pro",
-        "11lite": "Windows 11 SuperLite",
+        "11ltsc": "Windows 11 LTSC 2024",
+        "11iot": "Windows 11 IoT Enterprise LTSC",
+        "11pro": "Windows 11 Pro 24H2",
         "11atlas": "Windows 11 Atlas",
-        "tiny10": "Tiny10 23H2",
-        "tiny11": "Tiny11 23H2"
+        "tiny10": "Tiny10",
+        "tiny11": "Tiny11"
     }
     win_name = win_names.get(win_code, "Windows")
     image_name = f"golden-{win_code}"
@@ -1250,7 +1289,14 @@ def start_golden_build(chat_id, tumbal, win_code, win_name, image_name, iso_url)
     password = tumbal["password"]
     name = tumbal["name"]
     
-    iso_source = f"gdrive:rdp-isos/{win_code}.iso" if iso_url is None else iso_url[:50] + "..."
+    # Determine ISO source for display
+    auto_download_versions = ["10ltsc", "10iot", "10pro", "11ltsc", "11iot", "11pro", "2019", "2022", "2025"]
+    if win_code in auto_download_versions:
+        iso_source = "Auto-download (massgrave.dev)"
+    elif iso_url:
+        iso_source = iso_url[:50] + "..." if len(iso_url) > 50 else iso_url
+    else:
+        iso_source = f"gdrive:rdp-isos/{win_code}.iso"
     
     bot.send_message(chat_id, f"""🏗 <b>BUILD GOLDEN IMAGE</b>
 ━━━━━━━━━━━━━━━━━━
