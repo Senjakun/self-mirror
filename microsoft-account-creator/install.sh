@@ -121,28 +121,31 @@ read -p "   Enter 2Captcha API Key [or press Enter to skip]: " CAPTCHA_KEY
 
 echo ""
 echo -e "${YELLOW}🌐 WEBSHARE.IO PROXY SETUP${NC}"
-echo -e "   Format: user:pass@host:port"
+echo -e "   Your Webshare settings:"
+echo -e "   - Authentication Method: ${GREEN}IP Authentication${NC}"
+echo -e "   - Connection Method: ${GREEN}Direct Connection${NC}"
 echo ""
-read -p "   Enter Proxy [or press Enter to skip]: " PROXY_STRING
+echo -e "   Enter proxies from your Proxy List (IP:PORT format)"
+echo -e "   Example: 67.227.42.218:6195"
+echo ""
 
-# Parse proxy string
-PROXY_USER=""
-PROXY_PASS=""
-PROXY_IP=""
-PROXY_PORT=""
-
-if [ ! -z "$PROXY_STRING" ]; then
-  if [[ "$PROXY_STRING" == *"@"* ]]; then
-    PROXY_AUTH=$(echo "$PROXY_STRING" | cut -d'@' -f1)
-    PROXY_HOST=$(echo "$PROXY_STRING" | cut -d'@' -f2)
-    PROXY_USER=$(echo "$PROXY_AUTH" | cut -d':' -f1)
-    PROXY_PASS=$(echo "$PROXY_AUTH" | cut -d':' -f2)
-    PROXY_IP=$(echo "$PROXY_HOST" | cut -d':' -f1)
-    PROXY_PORT=$(echo "$PROXY_HOST" | cut -d':' -f2)
-  else
-    PROXY_IP=$(echo "$PROXY_STRING" | cut -d':' -f1)
-    PROXY_PORT=$(echo "$PROXY_STRING" | cut -d':' -f2)
+# Collect proxies
+PROXY_LIST=""
+while true; do
+  read -p "   Enter Proxy IP:PORT [or press Enter when done]: " PROXY_ENTRY
+  if [ -z "$PROXY_ENTRY" ]; then
+    break
   fi
+  if [ -z "$PROXY_LIST" ]; then
+    PROXY_LIST="'$PROXY_ENTRY'"
+  else
+    PROXY_LIST="$PROXY_LIST, '$PROXY_ENTRY'"
+  fi
+  echo -e "   ${GREEN}✓ Added: $PROXY_ENTRY${NC}"
+done
+
+if [ -z "$PROXY_LIST" ]; then
+  echo -e "   ${YELLOW}No proxies added. You can add them later in config.js${NC}"
 fi
 
 echo ""
@@ -161,16 +164,42 @@ print_success ".env file created"
 
 # Update config.js with values
 print_status "Updating config.js..."
-if [ ! -z "$CAPTCHA_KEY" ]; then
-  sed -i "s/CAPTCHA_API_KEY: ''/CAPTCHA_API_KEY: '$CAPTCHA_KEY'/" $CONFIG_FILE 2>/dev/null || true
-fi
 
-if [ ! -z "$PROXY_USER" ]; then
-  sed -i "s/PROXY_USERNAME: ''/PROXY_USERNAME: '$PROXY_USER'/" $CONFIG_FILE 2>/dev/null || true
-  sed -i "s/PROXY_PASSWORD: ''/PROXY_PASSWORD: '$PROXY_PASS'/" $CONFIG_FILE 2>/dev/null || true
-  sed -i "s/PROXY_IP: 'proxy.webshare.io'/PROXY_IP: '$PROXY_IP'/" $CONFIG_FILE 2>/dev/null || true
-  sed -i "s/PROXY_PORT: '80'/PROXY_PORT: '$PROXY_PORT'/" $CONFIG_FILE 2>/dev/null || true
-fi
+# Create updated config.js
+cat > $CONFIG_FILE << CONFIGEOF
+module.exports = {
+  // Account Creation Settings
+  ADD_RECOVERY_EMAIL: true,
+  EMAIL_DOMAIN: '@outlook.com', // @outlook.com or @hotmail.com
+  
+  // 2Captcha Settings
+  CAPTCHA_PROVIDER: 'twocaptcha',
+  CAPTCHA_API_KEY: '$CAPTCHA_KEY',
+  FUNCAPTCHA_SITE_KEY: 'B7D8911C-5CC8-A9A3-35B0-554ACEE604DA',
+  
+  // Webshare.io Proxy Settings (IP Authentication + Direct Connection)
+  USE_PROXY: true,
+  PROXY_TYPE: 'http',
+  PROXY_AUTH_METHOD: 'ip',
+  
+  // Proxy List - from your Webshare Proxy List
+  PROXY_LIST: [$PROXY_LIST],
+  
+  // File Paths
+  NAMES_FILE: 'src/Utils/names.txt',
+  WORDS_FILE: 'src/Utils/words5char.txt',
+  ACCOUNTS_FILE: 'accounts.txt',
+  PROXY_FILE: 'proxies.txt',
+  
+  // Browser Settings
+  HEADLESS: false,
+  BROWSER_TIMEOUT: 3600000,
+  
+  // Generation Settings
+  PASSWORD_LENGTH: 12,
+  MAX_RETRIES: 3,
+};
+CONFIGEOF
 print_success "config.js updated"
 
 # Create necessary files
@@ -255,10 +284,10 @@ if [ ! -z "$CAPTCHA_KEY" ]; then
 else
   echo -e "   2Captcha:   ${YELLOW}Not set (use /setapikey in bot)${NC}"
 fi
-if [ ! -z "$PROXY_IP" ]; then
-  echo -e "   Proxy:      ${GREEN}✓ $PROXY_IP:$PROXY_PORT${NC}"
+if [ ! -z "$PROXY_LIST" ]; then
+  echo -e "   Proxies:    ${GREEN}✓ Configured (IP Auth + Direct)${NC}"
 else
-  echo -e "   Proxy:      ${YELLOW}Not set (use /setproxy in bot)${NC}"
+  echo -e "   Proxies:    ${YELLOW}Not set (edit config.js)${NC}"
 fi
 
 echo ""

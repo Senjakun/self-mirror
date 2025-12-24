@@ -13,8 +13,20 @@ let stats = {
   captchaSolved: 0
 };
 
+// Proxy rotation index
+let currentProxyIndex = 0;
+
 // Captcha solver instance
 let captchaSolver = null;
+
+function getNextProxy() {
+  if (!config.USE_PROXY || !config.PROXY_LIST || config.PROXY_LIST.length === 0) {
+    return null;
+  }
+  const proxy = config.PROXY_LIST[currentProxyIndex];
+  currentProxyIndex = (currentProxyIndex + 1) % config.PROXY_LIST.length;
+  return proxy;
+}
 
 async function initCaptchaSolver() {
   captchaSolver = createCaptchaSolver(config.CAPTCHA_PROVIDER, config.CAPTCHA_API_KEY);
@@ -75,20 +87,16 @@ async function createSingleAccount() {
   log("Applying Fingerprint...", "yellow");
   plugin.useFingerprint(fingerprint);
 
-  if (config.USE_PROXY && config.PROXY_IP) {
-    log("Applying proxy settings...", "green");
-    const proxyString = config.PROXY_USERNAME 
-      ? `${config.PROXY_USERNAME}:${config.PROXY_PASSWORD}@${config.PROXY_IP}:${config.PROXY_PORT}`
-      : `${config.PROXY_IP}:${config.PROXY_PORT}`;
-    
-    plugin.useProxy(proxyString, {
+  const proxy = getNextProxy();
+  if (proxy) {
+    log(`Using proxy: ${proxy}`, "green");
+    plugin.useProxy(proxy, {
       detectExternalIP: true,
       changeGeolocation: true,
       changeBrowserLanguage: true,
       changeTimezone: true,
       changeWebRTC: true,
     });
-    log("Proxy settings applied", "green");
   }
 
   log("Launching browser...", "green");
