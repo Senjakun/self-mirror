@@ -134,13 +134,41 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Get user input
+# Get user input (works even when script is executed via curl | bash)
 echo -e "${YELLOW}📝 Masukkan konfigurasi bot:${NC}"
 echo ""
 
-read -p "🔑 Bot Token (dari @BotFather): " BOT_TOKEN
-read -p "👤 Owner Telegram ID: " OWNER_ID
-read -p "📂 GitHub Repo URL (kosongkan jika lokal): " GITHUB_REPO
+prompt_tty() {
+    local prompt="$1"
+    local var_name="$2"
+
+    if [ -t 0 ]; then
+        read -r -p "$prompt" "$var_name"
+    elif [ -r /dev/tty ]; then
+        read -r -p "$prompt" "$var_name" < /dev/tty
+    else
+        # Non-interactive environment: expect env vars to be set
+        eval "$var_name=\"\${$var_name:-}\""
+    fi
+}
+
+prompt_tty "🔑 Bot Token (dari @BotFather): " BOT_TOKEN
+prompt_tty "👤 Owner Telegram ID: " OWNER_ID
+prompt_tty "📂 GitHub Repo URL (kosongkan jika lokal): " GITHUB_REPO
+
+# Basic validation
+if [ -z "${BOT_TOKEN:-}" ] || [[ "${BOT_TOKEN:-}" != *:* ]]; then
+    echo -e "${RED}❌ BOT_TOKEN kosong/tidak valid.${NC}"
+    echo -e "${YELLOW}➡️  Jalankan dengan command ini agar prompt muncul:${NC}"
+    echo "   bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Senjakun/priv-senja/main/telegram_bot/install_bot.sh)\""
+    echo -e "${YELLOW}Atau set env dulu:${NC} BOT_TOKEN='xxx:yyy' OWNER_ID='123'" 
+    exit 1
+fi
+
+if [ -z "${OWNER_ID:-}" ]; then
+    echo -e "${RED}❌ OWNER_ID kosong.${NC}"
+    exit 1
+fi
 
 INSTALL_DIR="/root/rdp-bot"
 
