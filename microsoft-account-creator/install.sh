@@ -121,32 +121,18 @@ read -p "   Enter 2Captcha API Key [or press Enter to skip]: " CAPTCHA_KEY
 
 echo ""
 echo -e "${YELLOW}🌐 WEBSHARE.IO PROXY SETUP${NC}"
-echo -e "   Your Webshare settings:"
-echo -e "   - Authentication Method: ${GREEN}IP Authentication${NC}"
-echo -e "   - Connection Method: ${GREEN}Direct Connection${NC}"
+echo -e "   Steps in Webshare Dashboard:"
+echo -e "   1. Go to ${CYAN}Proxy Settings${NC}"
+echo -e "   2. Set Authentication: ${GREEN}IP Authentication${NC}"
+echo -e "   3. Add your server IP to whitelist"
+echo -e "   4. Set Connection: ${GREEN}Rotating Proxy Endpoint${NC}"
+echo -e "   5. Copy the rotating endpoint (e.g., p.webshare.io:80)"
 echo ""
-echo -e "   Enter proxies from your Proxy List (IP:PORT format)"
-echo -e "   Example: 67.227.42.218:6195"
-echo ""
-
-# Collect proxies
-PROXY_LIST=""
-while true; do
-  read -p "   Enter Proxy IP:PORT [or press Enter when done]: " PROXY_ENTRY
-  if [ -z "$PROXY_ENTRY" ]; then
-    break
-  fi
-  if [ -z "$PROXY_LIST" ]; then
-    PROXY_LIST="'$PROXY_ENTRY'"
-  else
-    PROXY_LIST="$PROXY_LIST, '$PROXY_ENTRY'"
-  fi
-  echo -e "   ${GREEN}✓ Added: $PROXY_ENTRY${NC}"
-done
-
-if [ -z "$PROXY_LIST" ]; then
-  echo -e "   ${YELLOW}No proxies added. You can add them later in config.js${NC}"
+read -p "   Enter Rotating Proxy Endpoint [default: p.webshare.io:80]: " ROTATING_PROXY
+if [ -z "$ROTATING_PROXY" ]; then
+  ROTATING_PROXY="p.webshare.io:80"
 fi
+echo -e "   ${GREEN}✓ Using: $ROTATING_PROXY${NC}"
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -170,26 +156,22 @@ cat > $CONFIG_FILE << CONFIGEOF
 module.exports = {
   // Account Creation Settings
   ADD_RECOVERY_EMAIL: true,
-  EMAIL_DOMAIN: '@outlook.com', // @outlook.com or @hotmail.com
+  EMAIL_DOMAIN: '@outlook.com',
   
   // 2Captcha Settings
   CAPTCHA_PROVIDER: 'twocaptcha',
   CAPTCHA_API_KEY: '$CAPTCHA_KEY',
   FUNCAPTCHA_SITE_KEY: 'B7D8911C-5CC8-A9A3-35B0-554ACEE604DA',
   
-  // Webshare.io Proxy Settings (IP Authentication + Direct Connection)
+  // Webshare.io Rotating Proxy (IP Authentication)
   USE_PROXY: true,
   PROXY_TYPE: 'http',
-  PROXY_AUTH_METHOD: 'ip',
-  
-  // Proxy List - from your Webshare Proxy List
-  PROXY_LIST: [$PROXY_LIST],
+  ROTATING_PROXY: '$ROTATING_PROXY',
   
   // File Paths
   NAMES_FILE: 'src/Utils/names.txt',
   WORDS_FILE: 'src/Utils/words5char.txt',
   ACCOUNTS_FILE: 'accounts.txt',
-  PROXY_FILE: 'proxies.txt',
   
   // Browser Settings
   HEADLESS: false,
@@ -204,7 +186,6 @@ print_success "config.js updated"
 
 # Create necessary files
 touch accounts.txt 2>/dev/null
-touch proxies.txt 2>/dev/null
 
 # Create start script
 print_status "Creating start.sh..."
@@ -284,11 +265,7 @@ if [ ! -z "$CAPTCHA_KEY" ]; then
 else
   echo -e "   2Captcha:   ${YELLOW}Not set (use /setapikey in bot)${NC}"
 fi
-if [ ! -z "$PROXY_LIST" ]; then
-  echo -e "   Proxies:    ${GREEN}✓ Configured (IP Auth + Direct)${NC}"
-else
-  echo -e "   Proxies:    ${YELLOW}Not set (edit config.js)${NC}"
-fi
+echo -e "   Proxy:      ${GREEN}✓ $ROTATING_PROXY (Rotating)${NC}"
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
