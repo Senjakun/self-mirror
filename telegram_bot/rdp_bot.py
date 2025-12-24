@@ -1040,6 +1040,7 @@ Bisa pakai banyak VPS untuk paralel build.
     markup.add(types.InlineKeyboardButton("🔌 Test Koneksi", callback_data="tumbal_test"))
     markup.add(types.InlineKeyboardButton("📟 Run Command", callback_data="tumbal_run"))
     markup.add(types.InlineKeyboardButton("🏗 Build Golden Image", callback_data="tumbal_build_golden"))
+    markup.add(types.InlineKeyboardButton("🎯 Apply Atlas ke RDP", callback_data="apply_atlas_menu"))
     markup.add(types.InlineKeyboardButton("📋 List Local Images", callback_data="tumbal_list"))
     markup.add(types.InlineKeyboardButton("◀️ Kembali", callback_data="owner_settings"))
 
@@ -1154,34 +1155,43 @@ def ask_iso_url(call):
     
     win_name = win_names.get(win_code, "Windows")
     
-    # If Atlas, show info about manual setup
+    # If Atlas, show options: build LTSC first OR quick guide
     if is_atlas:
-        bot.answer_callback_query(call.id, "ℹ️ Atlas memerlukan setup manual")
+        bot.answer_callback_query(call.id, "ℹ️ Atlas = LTSC + Modifikasi")
+        
+        base_ltsc = "10ltsc" if win_code == "10atlas" else "11ltsc"
+        base_name = "Windows 10 LTSC" if win_code == "10atlas" else "Windows 11 LTSC"
         
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("✅ Build Win 10 LTSC (untuk Atlas)", callback_data="build_golden:10ltsc"))
-        markup.add(types.InlineKeyboardButton("✅ Build Win 11 LTSC (untuk Atlas)", callback_data="build_golden:11ltsc"))
+        # Option 1: Build LTSC + Auto Apply Atlas
+        markup.add(types.InlineKeyboardButton(
+            f"🚀 Build {base_name} + Auto Atlas", 
+            callback_data=f"build_atlas_auto:{base_ltsc}"
+        ))
+        # Option 2: Just build LTSC (apply Atlas manually later)
+        markup.add(types.InlineKeyboardButton(
+            f"📦 Build {base_name} saja", 
+            callback_data=f"build_golden:{base_ltsc}"
+        ))
         markup.add(types.InlineKeyboardButton("◀️ Kembali", callback_data="tumbal_build_golden"))
         
-        text = f"""ℹ️ <b>ATLAS OS - PERHATIAN!</b>
+        text = f"""🎯 <b>ATLAS OS - PILIH METODE</b>
 ━━━━━━━━━━━━━━━━━━
 
-Atlas OS <b>TIDAK menyediakan ISO file</b>!
-Atlas adalah <b>script modifikasi</b> untuk Windows yang sudah terinstall.
+Atlas OS adalah <b>script modifikasi</b> untuk Windows LTSC.
 
-<b>📝 Cara membuat Atlas Golden Image:</b>
+<b>🚀 Opsi 1: Auto Apply Atlas</b>
+• Build {base_name} golden image
+• Setelah deploy, bot auto-download Atlas tools
+• Tinggal jalankan AME Wizard di RDP
+• ⏱ Total: ~45-60 menit
 
-<b>1.</b> Build golden image dengan Windows LTSC dulu
-   (pilih tombol di bawah)
+<b>📦 Opsi 2: Manual Apply Atlas</b>
+• Build {base_name} golden image saja
+• Download & apply Atlas sendiri di RDP
+• ⏱ Build: ~30-40 menit
 
-<b>2.</b> Deploy ke RDP dan login
-
-<b>3.</b> Di dalam Windows, apply Atlas Playbook:
-   • Download Atlas: https://atlasos.net/
-   • Download AME Wizard: https://ameliorated.io/
-   • Jalankan AME Wizard, apply Atlas Playbook
-
-<b>4.</b> Setelah selesai, shutdown dan backup image"""
+💡 <b>Rekomendasi:</b> Opsi 1 (lebih mudah)"""
         
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
         return
@@ -1441,6 +1451,265 @@ def process_iso_url(message):
     image_name = f"golden-{win_code}"
     
     start_golden_build(message.chat.id, tumbal, win_code, win_name, image_name, iso_url)
+
+# ==================== BUILD ATLAS AUTO (LTSC + Apply Atlas) ====================
+@bot.callback_query_handler(func=lambda call: call.data.startswith("build_atlas_auto:"))
+def build_atlas_auto(call):
+    """Build LTSC then auto-apply Atlas after deploy"""
+    if not is_owner(call.from_user.id):
+        bot.answer_callback_query(call.id, "⛔ Hanya untuk owner!")
+        return
+    
+    tumbal = get_active_tumbal()
+    if not tumbal:
+        bot.answer_callback_query(call.id, "❌ Belum ada VPS tumbal aktif!")
+        return
+    
+    win_code = call.data.replace("build_atlas_auto:", "")
+    win_names = {
+        "10ltsc": "Windows 10 LTSC 2021",
+        "11ltsc": "Windows 11 LTSC 2024"
+    }
+    win_name = win_names.get(win_code, "Windows LTSC")
+    atlas_name = "Atlas 10" if win_code == "10ltsc" else "Atlas 11"
+    
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("✅ Mulai Build + Atlas", callback_data=f"confirm_atlas_build:{win_code}"),
+        types.InlineKeyboardButton("❌ Batal", callback_data="tumbal_build_golden")
+    )
+    
+    text = f"""🎯 <b>BUILD {atlas_name.upper()}</b>
+━━━━━━━━━━━━━━━━━━
+
+<b>Proses yang akan dilakukan:</b>
+
+<b>1️⃣ Build Golden Image</b> (~30-40 menit)
+   • Download ISO {win_name} dari massgrave.dev
+   • Install Windows via KVM
+   • Compress menjadi golden image
+
+<b>2️⃣ Setelah deploy ke RDP user:</b>
+   Bot akan otomatis download:
+   • AME Wizard
+   • Atlas Playbook (latest release)
+
+<b>3️⃣ Apply Atlas</b> (user tinggal jalankan)
+   • RDP ke Windows
+   • Jalankan AME Wizard
+   • Windows restart beberapa kali
+   • Selesai! (~15-20 menit)
+
+⏱ <b>Total estimasi:</b> 45-60 menit
+
+💡 Golden Image LTSC disimpan, jadi next time bisa skip step 1."""
+    
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_atlas_build:"))
+def confirm_atlas_build(call):
+    """Confirm and start LTSC build for Atlas"""
+    if not is_owner(call.from_user.id):
+        bot.answer_callback_query(call.id, "⛔ Hanya untuk owner!")
+        return
+    
+    tumbal = get_active_tumbal()
+    if not tumbal:
+        bot.answer_callback_query(call.id, "❌ Belum ada VPS tumbal aktif!")
+        return
+    
+    win_code = call.data.replace("confirm_atlas_build:", "")
+    win_names = {
+        "10ltsc": "Windows 10 LTSC 2021",
+        "11ltsc": "Windows 11 LTSC 2024"
+    }
+    win_name = win_names.get(win_code, "Windows LTSC")
+    image_name = f"golden-{win_code}"
+    
+    # Start build (same as regular golden build)
+    # The Atlas tools will be applied after user deploys the image
+    start_golden_build_for_atlas(call.message.chat.id, tumbal, win_code, win_name, image_name)
+
+def start_golden_build_for_atlas(chat_id, tumbal, win_code, win_name, image_name):
+    """Build golden image with Atlas instructions after completion"""
+    ip = tumbal["ip"]
+    password = tumbal["password"]
+    name = tumbal["name"]
+    
+    atlas_name = "Atlas 10" if win_code == "10ltsc" else "Atlas 11"
+    
+    bot.send_message(chat_id, f"""🎯 <b>BUILD {atlas_name.upper()}</b>
+━━━━━━━━━━━━━━━━━━
+
+📍 <b>VPS:</b> {name} ({ip})
+🪟 <b>Base:</b> {win_name}
+📦 <b>Output:</b> {image_name}.img.gz
+🔗 <b>ISO:</b> Auto-download (massgrave.dev)
+
+⏳ <b>Step 1: Build Golden Image...</b>
+
+⏱ Estimasi: 30-40 menit
+💡 Setelah selesai, deploy image lalu bot akan auto-apply Atlas tools.
+
+📺 <b>Monitor via VNC:</b>
+   <code>{ip}:5900</code>""", parse_mode="HTML")
+
+    def run_build():
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            script_path = os.path.join(script_dir, "build_golden_image.sh")
+            
+            if not os.path.exists(script_path):
+                bot.send_message(chat_id, "❌ Script build_golden_image.sh tidak ditemukan!")
+                return
+            
+            # Copy script ke tumbal VPS
+            subprocess.run(["chmod", "+x", script_path], check=False)
+            subprocess.run(
+                ["sshpass", "-p", password, "scp", "-o", "StrictHostKeyChecking=no",
+                 script_path, f"root@{ip}:/root/build_golden_image.sh"],
+                capture_output=True, timeout=60
+            )
+            
+            # Jalankan script
+            result = subprocess.run(
+                ["sshpass", "-p", password, "ssh", "-o", "StrictHostKeyChecking=no",
+                 "-o", "ServerAliveInterval=60", "-o", "ServerAliveCountMax=60",
+                 f"root@{ip}", f"bash /root/build_golden_image.sh {win_code} {image_name}"],
+                capture_output=True, text=True, timeout=7200  # 2 jam timeout
+            )
+            
+            if "BUILD COMPLETE" in result.stdout:
+                bot.send_message(chat_id, f"""✅ <b>BUILD LTSC SELESAI!</b>
+━━━━━━━━━━━━━━━━━━
+
+🪟 <b>Base:</b> {win_name}
+🎯 <b>Target:</b> {atlas_name}
+📦 <b>File:</b> {image_name}.img.gz
+📍 <b>Lokasi:</b> /root/rdp-images/
+
+<b>📌 LANGKAH SELANJUTNYA:</b>
+
+<b>1.</b> Deploy image ini ke VPS user via menu "Deploy Golden Image"
+
+<b>2.</b> Setelah RDP ready, gunakan menu:
+   <b>"🎯 Apply Atlas ke RDP"</b>
+   Bot akan otomatis download Atlas tools ke Windows.
+
+<b>3.</b> RDP ke Windows dan jalankan AME Wizard
+   Tools sudah ada di: <code>%TEMP%\\AtlasOS</code>
+
+<b>Default Credentials:</b>
+• Username: <code>Admin</code>
+• Password: <code>Admin@123</code>""", parse_mode="HTML")
+            else:
+                error_log = result.stdout[-1500:] if result.stdout else result.stderr[-1500:]
+                bot.send_message(chat_id, f"⚠️ Build mungkin gagal. Cek log:\n<code>{error_log}</code>", parse_mode="HTML")
+            
+        except subprocess.TimeoutExpired:
+            bot.send_message(chat_id, "⏰ Build timeout (>2 jam). Cek manual di VPS tumbal.")
+        except Exception as e:
+            bot.send_message(chat_id, f"❌ Error: {str(e)}")
+
+    threading.Thread(target=run_build, daemon=True).start()
+
+# ==================== APPLY ATLAS TO DEPLOYED RDP ====================
+@bot.callback_query_handler(func=lambda call: call.data == "apply_atlas_menu")
+def apply_atlas_menu(call):
+    """Menu to apply Atlas to a deployed RDP"""
+    if not is_owner(call.from_user.id):
+        bot.answer_callback_query(call.id, "⛔ Hanya untuk owner!")
+        return
+    
+    text = """🎯 <b>APPLY ATLAS KE RDP</b>
+━━━━━━━━━━━━━━━━━━
+
+Fitur ini akan download Atlas tools ke Windows RDP yang sudah di-deploy.
+
+<b>Prasyarat:</b>
+• RDP sudah running (bisa diakses via RDP client)
+• Windows harus LTSC edition
+• OpenSSH Server aktif di Windows
+
+<b>Kirim IP dan Password RDP:</b>
+Format: <code>IP PASSWORD</code>
+
+Contoh: <code>192.168.1.100 MyP@ssw0rd</code>
+
+Ketik /cancel untuk membatalkan."""
+    
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("◀️ Kembali", callback_data="tumbal_menu"))
+    
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
+    bot.register_next_step_handler(call.message, process_atlas_target)
+
+def process_atlas_target(message):
+    """Process RDP IP and password for Atlas application"""
+    user_id = message.from_user.id
+    
+    if message.text and message.text.lower() == "/cancel":
+        bot.reply_to(message, "❌ Apply Atlas dibatalkan.")
+        return
+    
+    if not message.text or len(message.text.split()) < 2:
+        bot.reply_to(message, "❌ Format salah! Gunakan: <code>IP PASSWORD</code>", parse_mode="HTML")
+        bot.register_next_step_handler(message, process_atlas_target)
+        return
+    
+    parts = message.text.strip().split(maxsplit=1)
+    rdp_ip = parts[0]
+    rdp_password = parts[1]
+    
+    # Start apply Atlas
+    apply_atlas_to_rdp(message.chat.id, rdp_ip, rdp_password)
+
+def apply_atlas_to_rdp(chat_id, rdp_ip, rdp_password):
+    """Apply Atlas tools to a deployed RDP"""
+    
+    bot.send_message(chat_id, f"""🎯 <b>APPLY ATLAS OS</b>
+━━━━━━━━━━━━━━━━━━
+
+📍 <b>Target RDP:</b> <code>{rdp_ip}</code>
+
+⏳ <b>Menghubungi Windows...</b>
+
+💡 Proses ini akan:
+1. Test koneksi SSH ke Windows
+2. Download AME Wizard
+3. Download Atlas Playbook (latest)
+4. Simpan di %TEMP%\\AtlasOS
+
+⏱ Estimasi: 2-5 menit""", parse_mode="HTML")
+
+    def run_atlas():
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            script_path = os.path.join(script_dir, "apply_atlas.sh")
+            
+            if not os.path.exists(script_path):
+                bot.send_message(chat_id, "❌ Script apply_atlas.sh tidak ditemukan!")
+                return
+            
+            subprocess.run(["chmod", "+x", script_path], check=False)
+            
+            result = subprocess.run(
+                ["bash", script_path, rdp_ip, rdp_password, str(chat_id), BOT_TOKEN],
+                capture_output=True, text=True, timeout=900  # 15 menit timeout
+            )
+            
+            # Script handles its own Telegram messages
+            if result.returncode != 0:
+                if "ATLAS_READY" not in result.stdout:
+                    error_log = result.stderr[-500:] if result.stderr else result.stdout[-500:]
+                    bot.send_message(chat_id, f"⚠️ Proses mungkin gagal:\n<code>{error_log}</code>", parse_mode="HTML")
+            
+        except subprocess.TimeoutExpired:
+            bot.send_message(chat_id, "⏰ Timeout menunggu Windows. Pastikan OpenSSH aktif.")
+        except Exception as e:
+            bot.send_message(chat_id, f"❌ Error: {str(e)}")
+
+    threading.Thread(target=run_atlas, daemon=True).start()
 
 # ==================== ADD TUMBAL VPS ====================
 @bot.callback_query_handler(func=lambda call: call.data == "tumbal_add")
