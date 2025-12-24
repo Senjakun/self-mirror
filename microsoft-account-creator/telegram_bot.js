@@ -111,6 +111,7 @@ bot.on('callback_query', async (query) => {
     case 'menu_settings':
       await bot.editMessageText(
         `⚙️ *Settings*\n\n` +
+        `🎯 2Captcha: \`${config.CAPTCHA_API_KEY ? config.CAPTCHA_API_KEY.substring(0, 8) + '...' : 'Not set'}\`\n` +
         `📧 Domain: \`${config.EMAIL_DOMAIN}\`\n` +
         `🔄 Recovery: \`${config.ADD_RECOVERY_EMAIL ? 'ON' : 'OFF'}\`\n` +
         `🖥️ Headless: \`${config.HEADLESS ? 'ON' : 'OFF'}\``,
@@ -118,9 +119,11 @@ bot.on('callback_query', async (query) => {
           chat_id: chatId, message_id: msgId, parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
+              [{ text: `🎯 2Captcha: ${config.CAPTCHA_API_KEY ? '✅ Set' : '❌ Not set'}`, callback_data: 'set_2captcha' }],
               [{ text: `📧 Domain: ${config.EMAIL_DOMAIN}`, callback_data: 'toggle_domain' }],
               [{ text: `🔄 Recovery: ${config.ADD_RECOVERY_EMAIL ? '✅' : '❌'}`, callback_data: 'toggle_recovery' }],
               [{ text: `🖥️ Headless: ${config.HEADLESS ? '✅' : '❌'}`, callback_data: 'toggle_headless' }],
+              [{ text: '💰 Check Balance', callback_data: 'check_balance' }],
               [{ text: '⬅️ Back', callback_data: 'back_main' }]
             ]
           }
@@ -175,6 +178,55 @@ bot.on('callback_query', async (query) => {
       saveConfig(config);
       await bot.answerCallbackQuery(query.id, { text: `Proxy: ${config.USE_PROXY ? 'ON' : 'OFF'}` });
       bot.emit('callback_query', { ...query, data: 'menu_proxy' });
+      break;
+
+    case 'set_2captcha':
+      await bot.editMessageText(
+        `🎯 *Set 2Captcha API Key*\n\n` +
+        `Current: \`${config.CAPTCHA_API_KEY ? config.CAPTCHA_API_KEY.substring(0, 8) + '...' : 'Not set'}\`\n\n` +
+        `Kirim API key dengan format:\n\`/setapikey YOUR_API_KEY\`\n\n` +
+        `Dapatkan API key di: [2captcha.com](https://2captcha.com)`,
+        {
+          chat_id: chatId, message_id: msgId, parse_mode: 'Markdown',
+          disable_web_page_preview: true,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '⬅️ Back', callback_data: 'menu_settings' }]
+            ]
+          }
+        }
+      );
+      break;
+
+    case 'check_balance':
+      if (!config.CAPTCHA_API_KEY) {
+        await bot.answerCallbackQuery(query.id, { text: '❌ Set API key first!', show_alert: true });
+        break;
+      }
+      
+      await bot.answerCallbackQuery(query.id, { text: '⏳ Checking balance...' });
+      
+      const https = require('https');
+      const url = `https://2captcha.com/res.php?key=${config.CAPTCHA_API_KEY}&action=getbalance&json=1`;
+      
+      https.get(url, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const result = JSON.parse(data);
+            if (result.status === 1) {
+              bot.sendMessage(chatId, `💰 *2Captcha Balance*\n\n$${result.request}`, { parse_mode: 'Markdown' });
+            } else {
+              bot.sendMessage(chatId, `❌ Error: ${result.request}`);
+            }
+          } catch (e) {
+            bot.sendMessage(chatId, '❌ Failed to check balance');
+          }
+        });
+      }).on('error', () => {
+        bot.sendMessage(chatId, '❌ Connection error');
+      });
       break;
 
     case 'gen_1': case 'gen_5': case 'gen_10': 
