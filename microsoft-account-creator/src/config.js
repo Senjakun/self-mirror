@@ -9,12 +9,17 @@ module.exports = {
   FUNCAPTCHA_SITE_KEY: 'B7D8911C-5CC8-A9A3-35B0-554ACEE604DA',
   
   // Webshare.io Proxy Settings (your subscription)
+  // Authentication: IP Authentication (no username/password needed)
+  // Connection: Direct Connection (use individual proxy IPs)
   USE_PROXY: true,
   PROXY_TYPE: 'http',
-  PROXY_IP: 'proxy.webshare.io', // or specific IP from webshare
-  PROXY_PORT: '80',
-  PROXY_USERNAME: '', // Your webshare username
-  PROXY_PASSWORD: '', // Your webshare password
+  PROXY_AUTH_METHOD: 'ip', // 'ip' for IP Authentication, 'userpass' for Username/Password
+  
+  // For IP Authentication - just use IP:PORT from your proxy list
+  PROXY_LIST: [
+    // Add your proxies here from Webshare proxy list
+    // Example: '67.227.42.218:6195'
+  ],
   
   // File Paths
   NAMES_FILE: 'src/Utils/names.txt',
