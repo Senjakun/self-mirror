@@ -902,15 +902,16 @@ Silakan coba lagi.""",
         install_thread.start()
 
         # Kirim konfirmasi
-        source_info = f"☁️ Image: {gdrive_image}" if gdrive_image else "☁️ Sumber: Online"
+        # Image info hanya ditampilkan jika ada (Dedicated wajib ada image)
+        image_line = f"\n☁️ <b>Image:</b> <code>{base_image}</code>" if gdrive_image else ""
         
         # Estimasi waktu berdasarkan tipe
-        if is_golden_image:
-            time_estimate = "⚡ Golden Image: 1-2 menit"
-        elif rdp_type == "docker":
+        if rdp_type == "docker":
             time_estimate = "🐳 Docker RDP: 10-15 menit"
+        elif "golden" in base_image.lower():
+            time_estimate = "⚡ Golden Image: 1-2 menit"
         else:
-            time_estimate = "🖥 Dedicated RDP: 15-30 menit"
+            time_estimate = "🖥 Regular Image: 15-30 menit"
         
         bot.send_message(
             message.chat.id,
@@ -919,8 +920,7 @@ Silakan coba lagi.""",
 
 📦 <b>Tipe:</b> {type_name}
 📍 <b>IP:</b> <code>{ip}</code>
-🪟 <b>Windows:</b> {win_name}
-{source_info}
+🪟 <b>Windows:</b> {win_name}{image_line}
 
 ⏳ Instalasi berjalan di background.
 Kamu akan menerima notifikasi saat selesai.
