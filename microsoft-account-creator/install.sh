@@ -41,16 +41,23 @@ echo -e "${CYAN}                    STEP 1: DEPENDENCIES                     ${N
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
-print_status "Installing Chrome dependencies..."
+print_status "Installing Chrome/Puppeteer dependencies..."
 
 if [ "$OS" = "debian" ]; then
   sudo apt-get update -qq
   sudo apt-get install -y -qq \
-    ca-certificates fonts-liberation libappindicator3-1 libasound2 \
+    ca-certificates fonts-liberation libasound2 \
     libatk-bridge2.0-0 libatk1.0-0 libcups2 libdbus-1-3 libgbm1 \
     libgtk-3-0 libnspr4 libnss3 libxcomposite1 libxdamage1 \
-    libxrandr2 wget xvfb 2>/dev/null
+    libxrandr2 wget xvfb libxss1 libxtst6 2>/dev/null
   print_success "Chrome dependencies installed"
+elif [ "$OS" = "redhat" ]; then
+  sudo yum install -y -q \
+    alsa-lib atk cups-libs gtk3 libXcomposite libXdamage \
+    libXrandr libgbm libxshmfence nss pango 2>/dev/null
+  print_success "Chrome dependencies installed"
+else
+  print_warning "Unknown OS - skipping system dependencies"
 fi
 
 print_status "Checking Node.js..."
@@ -61,12 +68,25 @@ if ! command -v node &> /dev/null; then
   sudo apt-get install -y nodejs
   print_success "Node.js installed"
 else
-  print_success "Node.js $(node -v) already installed"
+  NODE_VERSION=$(node -v)
+  print_success "Node.js $NODE_VERSION already installed"
 fi
 
-print_status "Installing npm packages..."
-npm install --silent
-print_success "NPM packages installed"
+print_status "Installing npm packages (this may take 2-5 minutes)..."
+echo ""
+
+# Clean install
+rm -rf node_modules package-lock.json 2>/dev/null
+
+# Install with progress
+npm install 2>&1 | tail -5
+
+if [ $? -eq 0 ]; then
+  print_success "NPM packages installed successfully!"
+else
+  print_error "NPM install failed. Retrying..."
+  npm install
+fi
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -76,6 +96,7 @@ echo ""
 
 # Telegram Bot Token
 echo -e "${YELLOW}📱 TELEGRAM BOT SETUP${NC}"
+echo -e "   Get token from @BotFather on Telegram"
 echo ""
 read -p "   Enter Telegram Bot Token: " BOT_TOKEN
 while [ -z "$BOT_TOKEN" ]; do
@@ -85,6 +106,7 @@ done
 
 # Admin IDs
 echo ""
+echo -e "   Get your ID from @userinfobot on Telegram"
 read -p "   Enter Admin Telegram ID(s) [comma separated]: " ADMIN_IDS
 while [ -z "$ADMIN_IDS" ]; do
   print_error "Admin ID cannot be empty!"
@@ -93,24 +115,34 @@ done
 
 echo ""
 echo -e "${YELLOW}🔐 2CAPTCHA SETUP${NC}"
+echo -e "   Get API key from https://2captcha.com"
 echo ""
 read -p "   Enter 2Captcha API Key [or press Enter to skip]: " CAPTCHA_KEY
 
 echo ""
 echo -e "${YELLOW}🌐 WEBSHARE.IO PROXY SETUP${NC}"
+echo -e "   Format: user:pass@host:port"
 echo ""
-read -p "   Enter Proxy (format: user:pass@host:port) [or press Enter to skip]: " PROXY_STRING
+read -p "   Enter Proxy [or press Enter to skip]: " PROXY_STRING
 
 # Parse proxy string
+PROXY_USER=""
+PROXY_PASS=""
+PROXY_IP=""
+PROXY_PORT=""
+
 if [ ! -z "$PROXY_STRING" ]; then
-  # Extract username:password and host:port
-  PROXY_AUTH=$(echo "$PROXY_STRING" | cut -d'@' -f1)
-  PROXY_HOST=$(echo "$PROXY_STRING" | cut -d'@' -f2)
-  
-  PROXY_USER=$(echo "$PROXY_AUTH" | cut -d':' -f1)
-  PROXY_PASS=$(echo "$PROXY_AUTH" | cut -d':' -f2)
-  PROXY_IP=$(echo "$PROXY_HOST" | cut -d':' -f1)
-  PROXY_PORT=$(echo "$PROXY_HOST" | cut -d':' -f2)
+  if [[ "$PROXY_STRING" == *"@"* ]]; then
+    PROXY_AUTH=$(echo "$PROXY_STRING" | cut -d'@' -f1)
+    PROXY_HOST=$(echo "$PROXY_STRING" | cut -d'@' -f2)
+    PROXY_USER=$(echo "$PROXY_AUTH" | cut -d':' -f1)
+    PROXY_PASS=$(echo "$PROXY_AUTH" | cut -d':' -f2)
+    PROXY_IP=$(echo "$PROXY_HOST" | cut -d':' -f1)
+    PROXY_PORT=$(echo "$PROXY_HOST" | cut -d':' -f2)
+  else
+    PROXY_IP=$(echo "$PROXY_STRING" | cut -d':' -f1)
+    PROXY_PORT=$(echo "$PROXY_STRING" | cut -d':' -f2)
+  fi
 fi
 
 echo ""
@@ -122,112 +154,123 @@ echo ""
 # Create .env file
 print_status "Creating .env file..."
 cat > $ENV_FILE << EOF
-# Telegram Bot Configuration
 TELEGRAM_BOT_TOKEN=$BOT_TOKEN
 ADMIN_IDS=$ADMIN_IDS
-
-# 2Captcha Configuration
-CAPTCHA_API_KEY=$CAPTCHA_KEY
-
-# Webshare.io Proxy Configuration
-PROXY_USERNAME=$PROXY_USER
-PROXY_PASSWORD=$PROXY_PASS
-PROXY_IP=$PROXY_IP
-PROXY_PORT=$PROXY_PORT
 EOF
 print_success ".env file created"
 
 # Update config.js with values
 print_status "Updating config.js..."
 if [ ! -z "$CAPTCHA_KEY" ]; then
-  sed -i "s/CAPTCHA_API_KEY: ''/CAPTCHA_API_KEY: '$CAPTCHA_KEY'/" $CONFIG_FILE
+  sed -i "s/CAPTCHA_API_KEY: ''/CAPTCHA_API_KEY: '$CAPTCHA_KEY'/" $CONFIG_FILE 2>/dev/null || true
 fi
 
 if [ ! -z "$PROXY_USER" ]; then
-  sed -i "s/PROXY_USERNAME: ''/PROXY_USERNAME: '$PROXY_USER'/" $CONFIG_FILE
-  sed -i "s/PROXY_PASSWORD: ''/PROXY_PASSWORD: '$PROXY_PASS'/" $CONFIG_FILE
-  sed -i "s/PROXY_IP: 'proxy.webshare.io'/PROXY_IP: '$PROXY_IP'/" $CONFIG_FILE
-  sed -i "s/PROXY_PORT: '80'/PROXY_PORT: '$PROXY_PORT'/" $CONFIG_FILE
+  sed -i "s/PROXY_USERNAME: ''/PROXY_USERNAME: '$PROXY_USER'/" $CONFIG_FILE 2>/dev/null || true
+  sed -i "s/PROXY_PASSWORD: ''/PROXY_PASSWORD: '$PROXY_PASS'/" $CONFIG_FILE 2>/dev/null || true
+  sed -i "s/PROXY_IP: 'proxy.webshare.io'/PROXY_IP: '$PROXY_IP'/" $CONFIG_FILE 2>/dev/null || true
+  sed -i "s/PROXY_PORT: '80'/PROXY_PORT: '$PROXY_PORT'/" $CONFIG_FILE 2>/dev/null || true
 fi
 print_success "config.js updated"
 
 # Create necessary files
-touch accounts.txt
-touch proxies.txt
-chmod +x telegram_bot.js src/index.js
+touch accounts.txt 2>/dev/null
+touch proxies.txt 2>/dev/null
 
 # Create start script
-print_status "Creating start script..."
-cat > start.sh << 'EOF'
+print_status "Creating start.sh..."
+cat > start.sh << 'STARTEOF'
 #!/bin/bash
-source .env
-export TELEGRAM_BOT_TOKEN
-export ADMIN_IDS
-echo "Starting Microsoft Account Creator Bot..."
-npm run bot
-EOF
+cd "$(dirname "$0")"
+
+# Load .env
+if [ -f .env ]; then
+  export $(cat .env | grep -v '#' | xargs)
+fi
+
+echo "🤖 Starting Microsoft Account Creator Bot..."
+echo "   Press Ctrl+C to stop"
+echo ""
+
+node telegram_bot.js
+STARTEOF
 chmod +x start.sh
 print_success "start.sh created"
 
-# Create systemd service file
-print_status "Creating systemd service..."
-CURRENT_DIR=$(pwd)
-cat > msac-bot.service << EOF
-[Unit]
-Description=Microsoft Account Creator Telegram Bot
-After=network.target
+# Create background start script
+print_status "Creating start-bg.sh (background mode)..."
+cat > start-bg.sh << 'BGEOF'
+#!/bin/bash
+cd "$(dirname "$0")"
 
-[Service]
-Type=simple
-User=$USER
-WorkingDirectory=$CURRENT_DIR
-EnvironmentFile=$CURRENT_DIR/.env
-ExecStart=/usr/bin/npm run bot
-Restart=always
-RestartSec=10
+# Load .env
+if [ -f .env ]; then
+  export $(cat .env | grep -v '#' | xargs)
+fi
 
-[Install]
-WantedBy=multi-user.target
-EOF
-print_success "msac-bot.service created"
+echo "🤖 Starting bot in background..."
+nohup node telegram_bot.js > bot.log 2>&1 &
+echo $! > bot.pid
+echo "✅ Bot started! PID: $(cat bot.pid)"
+echo "   View logs: tail -f bot.log"
+echo "   Stop bot:  ./stop.sh"
+BGEOF
+chmod +x start-bg.sh
+print_success "start-bg.sh created"
+
+# Create stop script
+print_status "Creating stop.sh..."
+cat > stop.sh << 'STOPEOF'
+#!/bin/bash
+cd "$(dirname "$0")"
+
+if [ -f bot.pid ]; then
+  PID=$(cat bot.pid)
+  if ps -p $PID > /dev/null 2>&1; then
+    kill $PID
+    rm bot.pid
+    echo "✅ Bot stopped"
+  else
+    echo "⚠️ Bot not running (stale PID file)"
+    rm bot.pid
+  fi
+else
+  # Try to find and kill node process
+  pkill -f "node telegram_bot.js" 2>/dev/null && echo "✅ Bot stopped" || echo "⚠️ Bot not running"
+fi
+STOPEOF
+chmod +x stop.sh
+print_success "stop.sh created"
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${CYAN}                    ✅ INSTALLATION COMPLETE                 ${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo -e "${GREEN}Configuration Summary:${NC}"
-echo -e "   Bot Token:  ${YELLOW}${BOT_TOKEN:0:10}...${NC}"
+echo -e "${GREEN}Configuration:${NC}"
+echo -e "   Bot Token:  ${YELLOW}${BOT_TOKEN:0:15}...${NC}"
 echo -e "   Admin IDs:  ${YELLOW}$ADMIN_IDS${NC}"
 if [ ! -z "$CAPTCHA_KEY" ]; then
-  echo -e "   2Captcha:   ${GREEN}Configured${NC}"
+  echo -e "   2Captcha:   ${GREEN}✓ Configured${NC}"
 else
   echo -e "   2Captcha:   ${YELLOW}Not set (use /setapikey in bot)${NC}"
 fi
-if [ ! -z "$PROXY_USER" ]; then
-  echo -e "   Proxy:      ${GREEN}$PROXY_IP:$PROXY_PORT${NC}"
+if [ ! -z "$PROXY_IP" ]; then
+  echo -e "   Proxy:      ${GREEN}✓ $PROXY_IP:$PROXY_PORT${NC}"
 else
   echo -e "   Proxy:      ${YELLOW}Not set (use /setproxy in bot)${NC}"
 fi
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${CYAN}                       HOW TO RUN                            ${NC}"
+echo -e "${CYAN}                         HOW TO RUN                          ${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo -e "${YELLOW}Option 1: Quick Start${NC}"
-echo -e "   ${GREEN}./start.sh${NC}"
-echo ""
-echo -e "${YELLOW}Option 2: Run as Service (auto-restart)${NC}"
-echo -e "   ${GREEN}sudo cp msac-bot.service /etc/systemd/system/${NC}"
-echo -e "   ${GREEN}sudo systemctl daemon-reload${NC}"
-echo -e "   ${GREEN}sudo systemctl enable msac-bot${NC}"
-echo -e "   ${GREEN}sudo systemctl start msac-bot${NC}"
-echo ""
-echo -e "${YELLOW}Option 3: Manual Run${NC}"
-echo -e "   ${GREEN}source .env && npm run bot${NC}"
+echo -e "   ${YELLOW}./start.sh${NC}      - Run in foreground (see logs)"
+echo -e "   ${YELLOW}./start-bg.sh${NC}   - Run in background"
+echo -e "   ${YELLOW}./stop.sh${NC}       - Stop the bot"
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo -e "🎉 ${GREEN}Ready! Just run ${YELLOW}./start.sh${GREEN} to begin!${NC}"
+echo -e "🎉 ${GREEN}Ready! Run ${YELLOW}./start.sh${GREEN} to start the bot!${NC}"
 echo ""
