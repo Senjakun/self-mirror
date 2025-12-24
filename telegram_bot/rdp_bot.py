@@ -2775,20 +2775,23 @@ def tumbal_list_images(call):
             password = tumbal["password"]
             name = tumbal["name"]
 
-            # Hitung jumlah file dan list dengan ukuran
+            # Hitung jumlah file dan list dengan ukuran (pakai find+printf biar tidak tergantung opsi `ls`)
             result = subprocess.run(
                 ["sshpass", "-p", password, "ssh", "-o", "StrictHostKeyChecking=no",
                  f"root@{ip}", """
+set -e
 mkdir -p /root/rdp-images
 cd /root/rdp-images
 
-# List ALL files in directory
 echo "FILES_START"
-ls -1 --time-style=+"%Y-%m-%d" -lhS 2>/dev/null | grep -E "\\.(img|img\\.gz|qcow2|raw)$" | awk '{print $5"|"$6"|"$NF}'
+# Output: bytes|YYYY-MM-DD|filename
+find . -maxdepth 1 -type f -regextype posix-extended \
+  -regex './.*\\.(img|img\\.gz|qcow2|raw)$' \
+  -printf '%s|%TY-%Tm-%Td|%f\n' 2>/dev/null | sort -t'|' -k1,1nr
 echo "FILES_END"
 
-# Also show total count
-count=$(ls -1 2>/dev/null | grep -E "\\.(img|img\\.gz|qcow2|raw)$" | wc -l)
+count=$(find . -maxdepth 1 -type f -regextype posix-extended \
+  -regex './.*\\.(img|img\\.gz|qcow2|raw)$' 2>/dev/null | wc -l)
 echo "FILE_COUNT:$count"
 """],
                 capture_output=True, text=True, timeout=30
@@ -2801,6 +2804,15 @@ echo "FILE_COUNT:$count"
             files_list = []  # List of (filename, size, date)
             
             # Parse output
+            def _fmt_bytes(n: int) -> str:
+                units = ["B", "KB", "MB", "GB", "TB"]
+                v = float(n)
+                for u in units:
+                    if v < 1024 or u == units[-1]:
+                        return f"{v:.1f}{u}" if u != "B" else f"{int(v)}B"
+                    v /= 1024
+                return f"{int(n)}B"
+
             in_files_section = False
             for line in output.split('\n'):
                 if line.startswith("FILE_COUNT:"):
@@ -2815,10 +2827,14 @@ echo "FILE_COUNT:$count"
                 elif in_files_section and "|" in line:
                     parts = line.split("|")
                     if len(parts) >= 3:
-                        size = parts[0]
-                        date = parts[1]
-                        filename = parts[2]
+                        size_raw = parts[0].strip()
+                        date = parts[1].strip()
+                        filename = parts[2].strip()
                         if filename and filename not in ['.', '..']:
+                            try:
+                                size = _fmt_bytes(int(size_raw))
+                            except Exception:
+                                size = size_raw
                             files_list.append((filename, size, date))
 
             markup = types.InlineKeyboardMarkup()
