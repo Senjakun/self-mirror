@@ -66,33 +66,55 @@ fi
 mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
 cd "$WORK_DIR"
 
-# Download Windows ISO if not exists
+# Download Windows ISO
 WIN_ISO="$WORK_DIR/windows.iso"
 if [ ! -f "$WIN_ISO" ]; then
-    if [ -n "$CUSTOM_ISO_URL" ]; then
-        echo "📥 Downloading Windows ISO from custom URL..."
-        wget -q --show-progress -O "$WIN_ISO" "$CUSTOM_ISO_URL"
-    else
-        echo "❌ Custom ISO URL diperlukan!"
-        echo ""
-        echo "💡 Cara penggunaan:"
-        echo "   bash build_golden_image.sh [WIN_CODE] [IMAGE_NAME] [ISO_URL]"
-        echo ""
-        echo "📥 Contoh:"
-        echo "   bash build_golden_image.sh 10atlas golden-10atlas https://example.com/win10atlas.iso"
-        echo ""
-        echo "🔗 Sumber ISO populer:"
-        echo "   - Archive.org: https://archive.org/details/windows-iso"
-        echo "   - MSDN/Techbench: https://techbench.rg-adguard.net/"
-        exit 1
+    # Method 1: Check GDrive first
+    GDRIVE_ISO="gdrive:rdp-isos/${WIN_CODE}.iso"
+    echo "🔍 Checking GDrive for ISO: $GDRIVE_ISO"
+    
+    if rclone lsf "$GDRIVE_ISO" 2>/dev/null | grep -q ".iso"; then
+        echo "✅ Found ISO in GDrive, downloading..."
+        rclone copy "$GDRIVE_ISO" "$WORK_DIR/" --progress
+        mv "$WORK_DIR/${WIN_CODE}.iso" "$WIN_ISO" 2>/dev/null || true
     fi
     
+    # Method 2: Custom URL provided
+    if [ ! -f "$WIN_ISO" ] && [ -n "$CUSTOM_ISO_URL" ]; then
+        echo "📥 Downloading Windows ISO from custom URL..."
+        
+        # Check if it's a GDrive link
+        if echo "$CUSTOM_ISO_URL" | grep -q "drive.google.com\|gdrive:"; then
+            if echo "$CUSTOM_ISO_URL" | grep -q "gdrive:"; then
+                rclone copy "$CUSTOM_ISO_URL" "$WORK_DIR/" --progress
+                # Rename to windows.iso
+                find "$WORK_DIR" -name "*.iso" -exec mv {} "$WIN_ISO" \; 2>/dev/null
+            else
+                echo "❌ Google Drive web link tidak didukung!"
+                echo "   Gunakan format: gdrive:folder/file.iso"
+                echo "   Atau upload ke folder rdp-isos/ di GDrive"
+                exit 1
+            fi
+        else
+            wget -q --show-progress -O "$WIN_ISO" "$CUSTOM_ISO_URL"
+        fi
+    fi
+    
+    # Check if we got the ISO
     if [ ! -f "$WIN_ISO" ] || [ ! -s "$WIN_ISO" ]; then
-        echo "❌ Gagal download Windows ISO"
-        echo "   Periksa URL atau koneksi internet"
+        echo "❌ Windows ISO tidak ditemukan!"
+        echo ""
+        echo "📤 Upload ISO ke GDrive dengan nama: ${WIN_CODE}.iso"
+        echo "   Folder: gdrive:rdp-isos/"
+        echo ""
+        echo "   Contoh:"
+        echo "   rclone copy /path/to/windows10atlas.iso gdrive:rdp-isos/${WIN_CODE}.iso"
+        echo ""
+        echo "🔗 Atau jalankan ulang dengan URL:"
+        echo "   bash build_golden_image.sh ${WIN_CODE} ${IMAGE_NAME} 'https://..../file.iso'"
         exit 1
     fi
-    echo "✅ Windows ISO downloaded: $(du -h "$WIN_ISO" | cut -f1)"
+    echo "✅ Windows ISO ready: $(du -h "$WIN_ISO" | cut -f1)"
 fi
 
 # Download VirtIO drivers if not exists

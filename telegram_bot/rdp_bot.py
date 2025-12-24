@@ -1064,13 +1064,13 @@ def tumbal_build_golden_menu(call):
 
 <b>Pilih Windows untuk di-build:</b>
 
-⚠️ <b>Kamu perlu menyediakan URL ISO!</b>
-Setelah pilih Windows, bot akan minta link download ISO.
+✅ <b>Otomatis cek ISO di GDrive:</b>
+   <code>gdrive:rdp-isos/[WIN_CODE].iso</code>
 
-🔗 <b>Sumber ISO populer:</b>
-• Archive.org: archive.org/details/windows-iso
-• TechBench: tb.rg-adguard.net
-• Massgrave: massgrave.dev
+📤 <b>Cara upload ISO ke GDrive:</b>
+<code>rclone copy /path/to/win10.iso gdrive:rdp-isos/10atlas.iso</code>
+
+Kalau ISO belum ada di GDrive, bot akan minta link download.
 
 ⏱ <b>Estimasi build:</b> 30-60 menit
 💾 <b>Output:</b> ~5-10GB compressed"""
@@ -1140,40 +1140,184 @@ def ask_iso_url(call):
     }
     win_name = win_names.get(win_code, "Windows")
     
-    # Simpan pending build
-    pending_builds[call.from_user.id] = {
-        "win_code": win_code,
-        "win_name": win_name,
-        "tumbal": tumbal
-    }
+    # Cek apakah ISO sudah ada di GDrive
+    bot.answer_callback_query(call.id, f"🔍 Cek ISO di GDrive...")
     
-    bot.answer_callback_query(call.id, "📝 Kirim URL ISO...")
+    ip = tumbal["ip"]
+    password = tumbal["password"]
     
-    text = f"""🔗 <b>INPUT ISO URL</b>
+    # Check GDrive for existing ISO
+    try:
+        result = subprocess.run(
+            ["sshpass", "-p", password, "ssh", "-o", "StrictHostKeyChecking=no",
+             f"root@{ip}", f"rclone lsf gdrive:rdp-isos/{win_code}.iso 2>/dev/null"],
+            capture_output=True, text=True, timeout=30
+        )
+        iso_exists = ".iso" in result.stdout
+    except:
+        iso_exists = False
+    
+    if iso_exists:
+        # ISO ada di GDrive, langsung build
+        markup = types.InlineKeyboardMarkup()
+        markup.add(
+            types.InlineKeyboardButton("✅ Mulai Build", callback_data=f"confirm_build:{win_code}:gdrive"),
+            types.InlineKeyboardButton("❌ Batal", callback_data="tumbal_build_golden")
+        )
+        
+        text = f"""✅ <b>ISO DITEMUKAN DI GDRIVE!</b>
+━━━━━━━━━━━━━━━━━━
+
+🪟 <b>Windows:</b> {win_name}
+📁 <b>ISO:</b> <code>gdrive:rdp-isos/{win_code}.iso</code>
+📍 <b>VPS:</b> {tumbal['name']} ({tumbal['ip']})
+
+Klik tombol di bawah untuk mulai build."""
+        
+        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
+    else:
+        # ISO tidak ada, minta URL atau instruksi upload
+        pending_builds[call.from_user.id] = {
+            "win_code": win_code,
+            "win_name": win_name,
+            "tumbal": tumbal
+        }
+        
+        text = f"""📤 <b>ISO BELUM ADA DI GDRIVE</b>
 ━━━━━━━━━━━━━━━━━━
 
 🪟 <b>Windows:</b> {win_name}
 📍 <b>VPS:</b> {tumbal['name']} ({tumbal['ip']})
 
-Kirim link download ISO (direct link):
+<b>Opsi 1 - Upload ISO ke GDrive (Rekomendasi):</b>
+<code>rclone copy /path/to/file.iso gdrive:rdp-isos/{win_code}.iso</code>
 
-<b>Contoh format:</b>
-<code>https://archive.org/download/win10atlas/Win10Atlas.iso</code>
+Lalu kembali ke menu dan pilih lagi.
 
-<b>🔗 Sumber ISO:</b>
-• archive.org/details/windows-iso
-• tb.rg-adguard.net (TechBench)
-• massgrave.dev
+<b>Opsi 2 - Kirim direct link ISO:</b>
+Balas pesan ini dengan URL wget langsung.
 
-⚠️ Pastikan link adalah direct download, bukan halaman web!
+<b>Contoh:</b>
+<code>https://dl.bobpony.com/windows/10/tiny10.iso</code>
 
 Ketik /cancel untuk membatalkan."""
 
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("❌ Batal", callback_data="tumbal_build_golden"))
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("◀️ Kembali", callback_data="tumbal_build_golden"))
+        
+        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
+        bot.register_next_step_handler(call.message, process_iso_url)
+
+# Handler untuk confirm build dari GDrive
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_build:"))
+def confirm_build_from_gdrive(call):
+    if not is_owner(call.from_user.id):
+        bot.answer_callback_query(call.id, "⛔ Hanya untuk owner!")
+        return
     
-    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
-    bot.register_next_step_handler(call.message, process_iso_url)
+    parts = call.data.split(":")
+    win_code = parts[1]
+    source = parts[2]  # "gdrive" or custom url
+    
+    tumbal = get_active_tumbal()
+    if not tumbal:
+        bot.answer_callback_query(call.id, "❌ Belum ada VPS tumbal aktif!")
+        return
+    
+    win_names = {
+        "2012r2": "Windows Server 2012 R2",
+        "2016": "Windows Server 2016",
+        "2019": "Windows Server 2019",
+        "2022": "Windows Server 2022",
+        "2025": "Windows Server 2025",
+        "10pro": "Windows 10 Pro",
+        "10lite": "Windows 10 SuperLite",
+        "10atlas": "Windows 10 Atlas",
+        "11pro": "Windows 11 Pro",
+        "11lite": "Windows 11 SuperLite",
+        "11atlas": "Windows 11 Atlas",
+        "tiny10": "Tiny10 23H2",
+        "tiny11": "Tiny11 23H2"
+    }
+    win_name = win_names.get(win_code, "Windows")
+    image_name = f"golden-{win_code}"
+    
+    start_golden_build(call.message.chat.id, tumbal, win_code, win_name, image_name, None)
+
+def start_golden_build(chat_id, tumbal, win_code, win_name, image_name, iso_url):
+    """Fungsi utama untuk menjalankan build golden image"""
+    ip = tumbal["ip"]
+    password = tumbal["password"]
+    name = tumbal["name"]
+    
+    iso_source = f"gdrive:rdp-isos/{win_code}.iso" if iso_url is None else iso_url[:50] + "..."
+    
+    bot.send_message(chat_id, f"""🏗 <b>BUILD GOLDEN IMAGE</b>
+━━━━━━━━━━━━━━━━━━
+
+📍 <b>VPS:</b> {name} ({ip})
+🪟 <b>Windows:</b> {win_name}
+📦 <b>Output:</b> {image_name}.img.gz
+🔗 <b>ISO:</b> {iso_source}
+
+⏳ <b>Proses build dimulai...</b>
+
+⏱ Estimasi: 30-60 menit
+💡 Kamu akan dinotifikasi saat selesai.
+
+📺 <b>Monitor via VNC:</b>
+   <code>{ip}:5900</code>""", parse_mode="HTML")
+
+    def run_build():
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            script_path = os.path.join(script_dir, "build_golden_image.sh")
+            
+            if not os.path.exists(script_path):
+                bot.send_message(chat_id, "❌ Script build_golden_image.sh tidak ditemukan!")
+                return
+            
+            # Copy script ke tumbal VPS
+            subprocess.run(["chmod", "+x", script_path], check=False)
+            subprocess.run(
+                ["sshpass", "-p", password, "scp", "-o", "StrictHostKeyChecking=no",
+                 script_path, f"root@{ip}:/root/build_golden_image.sh"],
+                capture_output=True, timeout=60
+            )
+            
+            # Jalankan script - iso_url kosong jika dari GDrive
+            iso_param = f"'{iso_url}'" if iso_url else ""
+            result = subprocess.run(
+                ["sshpass", "-p", password, "ssh", "-o", "StrictHostKeyChecking=no",
+                 "-o", "ServerAliveInterval=60", "-o", "ServerAliveCountMax=60",
+                 f"root@{ip}", f"bash /root/build_golden_image.sh {win_code} {image_name} {iso_param}"],
+                capture_output=True, text=True, timeout=7200  # 2 jam timeout
+            )
+            
+            if "BUILD COMPLETE" in result.stdout:
+                bot.send_message(chat_id, f"""✅ <b>BUILD SELESAI!</b>
+━━━━━━━━━━━━━━━━━━
+
+🪟 <b>Windows:</b> {win_name}
+📦 <b>File:</b> {image_name}.img.gz
+📍 <b>Lokasi:</b> /root/rdp-images/
+
+<b>Default Credentials:</b>
+• Username: <code>Admin</code>
+• Password: <code>Admin@123</code>
+
+📤 <b>Upload ke GDrive:</b>
+Gunakan menu "List Local Images" untuk upload.""", parse_mode="HTML")
+            else:
+                error_log = result.stdout[-1500:] if result.stdout else result.stderr[-1500:]
+                bot.send_message(chat_id, f"⚠️ Build mungkin gagal. Cek log:\n<code>{error_log}</code>", parse_mode="HTML")
+            
+        except subprocess.TimeoutExpired:
+            bot.send_message(chat_id, "⏰ Build timeout (>2 jam). Cek manual di VPS tumbal.")
+        except Exception as e:
+            bot.send_message(chat_id, f"❌ Error: {str(e)}")
+
+    threading.Thread(target=run_build, daemon=True).start()
 
 def process_iso_url(message):
     user_id = message.from_user.id
@@ -1203,75 +1347,7 @@ def process_iso_url(message):
     tumbal = build_info["tumbal"]
     image_name = f"golden-{win_code}"
     
-    ip = tumbal["ip"]
-    password = tumbal["password"]
-    name = tumbal["name"]
-    
-    bot.send_message(message.chat.id, f"""🏗 <b>BUILD GOLDEN IMAGE</b>
-━━━━━━━━━━━━━━━━━━
-
-📍 <b>VPS:</b> {name} ({ip})
-🪟 <b>Windows:</b> {win_name}
-📦 <b>Output:</b> {image_name}.img.gz
-🔗 <b>ISO:</b> {iso_url[:50]}...
-
-⏳ <b>Proses build dimulai...</b>
-
-⏱ Estimasi: 30-60 menit
-💡 Kamu akan dinotifikasi saat selesai.
-
-📺 <b>Monitor via VNC:</b>
-   <code>{ip}:5900</code>""", parse_mode="HTML")
-
-    def run_build():
-        try:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            script_path = os.path.join(script_dir, "build_golden_image.sh")
-            
-            if not os.path.exists(script_path):
-                bot.send_message(message.chat.id, "❌ Script build_golden_image.sh tidak ditemukan!")
-                return
-            
-            # Copy script ke tumbal VPS
-            subprocess.run(["chmod", "+x", script_path], check=False)
-            subprocess.run(
-                ["sshpass", "-p", password, "scp", "-o", "StrictHostKeyChecking=no",
-                 script_path, f"root@{ip}:/root/build_golden_image.sh"],
-                capture_output=True, timeout=60
-            )
-            
-            # Jalankan script dengan custom ISO URL
-            result = subprocess.run(
-                ["sshpass", "-p", password, "ssh", "-o", "StrictHostKeyChecking=no",
-                 "-o", "ServerAliveInterval=60", "-o", "ServerAliveCountMax=60",
-                 f"root@{ip}", f"bash /root/build_golden_image.sh {win_code} {image_name} '{iso_url}'"],
-                capture_output=True, text=True, timeout=7200  # 2 jam timeout
-            )
-            
-            if "BUILD COMPLETE" in result.stdout:
-                bot.send_message(message.chat.id, f"""✅ <b>BUILD SELESAI!</b>
-━━━━━━━━━━━━━━━━━━
-
-🪟 <b>Windows:</b> {win_name}
-📦 <b>File:</b> {image_name}.img.gz
-📍 <b>Lokasi:</b> /root/rdp-images/
-
-<b>Default Credentials:</b>
-• Username: <code>Admin</code>
-• Password: <code>Admin@123</code>
-
-📤 <b>Upload ke GDrive:</b>
-Gunakan menu "List Local Images" untuk upload.""", parse_mode="HTML")
-            else:
-                error_log = result.stdout[-1500:] if result.stdout else result.stderr[-1500:]
-                bot.send_message(message.chat.id, f"⚠️ Build mungkin gagal. Cek log:\n<code>{error_log}</code>", parse_mode="HTML")
-            
-        except subprocess.TimeoutExpired:
-            bot.send_message(message.chat.id, "⏰ Build timeout (>2 jam). Cek manual di VPS tumbal.")
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Error: {str(e)}")
-
-    threading.Thread(target=run_build, daemon=True).start()
+    start_golden_build(message.chat.id, tumbal, win_code, win_name, image_name, iso_url)
 
 # ==================== ADD TUMBAL VPS ====================
 @bot.callback_query_handler(func=lambda call: call.data == "tumbal_add")
