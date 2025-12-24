@@ -75,9 +75,13 @@ async function createSingleAccount() {
   log("Applying Fingerprint...", "yellow");
   plugin.useFingerprint(fingerprint);
 
-  if (config.USE_PROXY && config.ROTATING_PROXY) {
-    log(`Using rotating proxy: ${config.ROTATING_PROXY}`, "green");
-    plugin.useProxy(config.ROTATING_PROXY, {
+  if (config.USE_PROXY && config.PROXY_HOST) {
+    const proxyString = config.PROXY_USERNAME
+      ? `${config.PROXY_USERNAME}:${config.PROXY_PASSWORD}@${config.PROXY_HOST}:${config.PROXY_PORT}`
+      : `${config.PROXY_HOST}:${config.PROXY_PORT}`;
+    
+    log(`Using rotating proxy: ${config.PROXY_HOST}:${config.PROXY_PORT}`, "green");
+    plugin.useProxy(proxyString, {
       detectExternalIP: true,
       changeGeolocation: true,
       changeBrowserLanguage: true,

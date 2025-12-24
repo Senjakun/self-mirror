@@ -130,12 +130,13 @@ bot.on('callback_query', async (query) => {
 
     case 'menu_proxy':
       await bot.editMessageText(
-        `🌐 *Webshare.io Proxy*\n\n` +
+        `🌐 *Webshare.io Rotating Proxy*\n\n` +
         `Status: \`${config.USE_PROXY ? 'ON' : 'OFF'}\`\n` +
-        `Mode: \`Rotating Proxy (IP Auth)\`\n` +
-        `Endpoint: \`${config.ROTATING_PROXY || 'Not set'}\`\n\n` +
-        `Set proxy dengan:\n\`/setproxy endpoint:port\`\n` +
-        `Contoh: \`/setproxy p.webshare.io:80\``,
+        `Host: \`${config.PROXY_HOST || 'p.webshare.io'}\`\n` +
+        `Port: \`${config.PROXY_PORT || '80'}\`\n` +
+        `User: \`${config.PROXY_USERNAME || 'Not set'}\`\n\n` +
+        `Set proxy dengan:\n\`/setproxy user:pass@host:port\`\n` +
+        `Contoh: \`/setproxy nyrtjgvw-rotate:xxx@p.webshare.io:80\``,
         {
           chat_id: chatId, message_id: msgId, parse_mode: 'Markdown',
           reply_markup: {
@@ -337,23 +338,38 @@ bot.onText(/\/setapikey (.+)/, (msg, match) => {
     { parse_mode: 'Markdown' });
 });
 
-// /setproxy (Rotating proxy format: endpoint:port)
+// /setproxy (Format: user:pass@host:port)
 bot.onText(/\/setproxy (.+)/, (msg, match) => {
   if (!isAdmin(msg.from.id)) return;
   
   const proxy = match[1].trim();
   const config = loadConfig();
   
-  // New format: just endpoint:port for rotating proxy with IP auth
-  config.ROTATING_PROXY = proxy;
+  if (proxy.includes('@')) {
+    // Format: user:pass@host:port
+    const [auth, addr] = proxy.split('@');
+    const [user, pass] = auth.split(':');
+    const [host, port] = addr.split(':');
+    config.PROXY_USERNAME = user;
+    config.PROXY_PASSWORD = pass;
+    config.PROXY_HOST = host;
+    config.PROXY_PORT = port || '80';
+  } else {
+    // Format: host:port (IP auth, no credentials)
+    const [host, port] = proxy.split(':');
+    config.PROXY_HOST = host;
+    config.PROXY_PORT = port || '80';
+    config.PROXY_USERNAME = '';
+    config.PROXY_PASSWORD = '';
+  }
+  
   config.USE_PROXY = true;
   saveConfig(config);
   
   bot.sendMessage(msg.chat.id, 
     `✅ Rotating proxy configured!\n\n` +
-    `🌐 Endpoint: \`${proxy}\`\n` +
-    `🔐 Auth: IP Authentication\n\n` +
-    `⚠️ Pastikan IP VPS sudah di-whitelist di Webshare!`,
+    `🌐 Host: \`${config.PROXY_HOST}:${config.PROXY_PORT}\`\n` +
+    `👤 User: \`${config.PROXY_USERNAME || 'IP Auth'}\``,
     { parse_mode: 'Markdown' }
   );
 });
