@@ -1,0 +1,30 @@
+{
+  "name": "microsoft-account-creator",
+  "version": "2.0.0",
+  "description": "Microsoft/Outlook Account Creator with 2Captcha & Webshare.io Proxy Support",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "bot": "node telegram_bot.js",
+    "generate": "node src/index.js",
+    "generate:5": "node src/index.js 5",
+    "generate:10": "node src/index.js 10"
+  },
+  "keywords": [
+    "outlook",
+    "microsoft",
+    "account",
+    "generator",
+    "2captcha",
+    "webshare"
+  ],
+  "author": "Hybrid",
+  "license": "MIT",
+  "dependencies": {
+    "node-telegram-bot-api": "^0.64.0",
+    "puppeteer-with-fingerprints": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

@@ -3,18 +3,18 @@ module.exports = {
   ADD_RECOVERY_EMAIL: true,
   EMAIL_DOMAIN: '@outlook.com', // @outlook.com or @hotmail.com
   
-  // CAPTCHA Solver Settings
-  CAPTCHA_PROVIDER: 'twocaptcha', // 'twocaptcha', 'anycaptcha', or 'manual'
-  CAPTCHA_API_KEY: '', // Your API key from captcha provider
-  FUNCAPTCHA_SITE_KEY: 'B7D8911C-5CC8-A9A3-35B0-554ACEE604DA', // Microsoft FunCaptcha site key
+  // 2Captcha Settings (your subscription)
+  CAPTCHA_PROVIDER: 'twocaptcha',
+  CAPTCHA_API_KEY: '', // Your 2Captcha API key
+  FUNCAPTCHA_SITE_KEY: 'B7D8911C-5CC8-A9A3-35B0-554ACEE604DA',
   
-  // Proxy Settings
-  USE_PROXY: false,
-  PROXY_TYPE: 'http', // 'http' or 'socks5'
-  PROXY_IP: '',
-  PROXY_PORT: '',
-  PROXY_USERNAME: '',
-  PROXY_PASSWORD: '',
+  // Webshare.io Proxy Settings (your subscription)
+  USE_PROXY: true,
+  PROXY_TYPE: 'http',
+  PROXY_IP: 'proxy.webshare.io', // or specific IP from webshare
+  PROXY_PORT: '80',
+  PROXY_USERNAME: '', // Your webshare username
+  PROXY_PASSWORD: '', // Your webshare password
   
   // File Paths
   NAMES_FILE: 'src/Utils/names.txt',
@@ -23,8 +23,8 @@ module.exports = {
   PROXY_FILE: 'proxies.txt',
   
   // Browser Settings
-  HEADLESS: false, // Set to true for headless mode (not recommended for captcha)
-  BROWSER_TIMEOUT: 3600000, // 1 hour timeout
+  HEADLESS: false,
+  BROWSER_TIMEOUT: 3600000,
   
   // Generation Settings
   PASSWORD_LENGTH: 12,
