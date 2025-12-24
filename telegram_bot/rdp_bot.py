@@ -2775,23 +2775,24 @@ def tumbal_list_images(call):
             password = tumbal["password"]
             name = tumbal["name"]
 
-            # Hitung jumlah file dan list dengan ukuran (pakai find+printf biar tidak tergantung opsi `ls`)
+            # Hitung jumlah file dan list dengan ukuran - simple approach
             result = subprocess.run(
                 ["sshpass", "-p", password, "ssh", "-o", "StrictHostKeyChecking=no",
                  f"root@{ip}", """
-set -e
 mkdir -p /root/rdp-images
 cd /root/rdp-images
 
 echo "FILES_START"
-# Output: bytes|YYYY-MM-DD|filename
-find . -maxdepth 1 -type f -regextype posix-extended \
-  -regex './.*\\.(img|img\\.gz|qcow2|raw)$' \
-  -printf '%s|%TY-%Tm-%Td|%f\n' 2>/dev/null | sort -t'|' -k1,1nr
+# Simple ls - bytes, date, filename
+for f in *.img *.img.gz *.qcow2 *.raw 2>/dev/null; do
+    [ -f "$f" ] || continue
+    size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+    date=$(stat -c%y "$f" 2>/dev/null | cut -d' ' -f1)
+    echo "${size}|${date}|${f}"
+done
 echo "FILES_END"
 
-count=$(find . -maxdepth 1 -type f -regextype posix-extended \
-  -regex './.*\\.(img|img\\.gz|qcow2|raw)$' 2>/dev/null | wc -l)
+count=$(ls -1 *.img *.img.gz *.qcow2 *.raw 2>/dev/null | wc -l || echo 0)
 echo "FILE_COUNT:$count"
 """],
                 capture_output=True, text=True, timeout=30
