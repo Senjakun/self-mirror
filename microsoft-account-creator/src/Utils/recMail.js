@@ -1,124 +1,176 @@
-const axios = require('axios');
+const https = require('https');
+
+function requestJson({ method, url, headers = {}, params, data }) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+
+    if (params && typeof params === 'object') {
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null) u.searchParams.set(k, String(v));
+      }
+    }
+
+    const body = data ? JSON.stringify(data) : undefined;
+
+    const req = https.request(
+      {
+        protocol: u.protocol,
+        hostname: u.hostname,
+        port: u.port || 443,
+        path: `${u.pathname}${u.search}`,
+        method,
+        headers: {
+          Accept: 'application/json, text/plain, */*',
+          ...(body ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } : {}),
+          ...headers,
+        },
+      },
+      (res) => {
+        let raw = '';
+        res.on('data', (chunk) => (raw += chunk));
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(raw || '{}');
+            resolve({ status: res.statusCode || 0, data: json });
+          } catch (e) {
+            reject(new Error(`Invalid JSON response (HTTP ${res.statusCode}): ${raw?.slice?.(0, 200)}`));
+          }
+        });
+      }
+    );
+
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
 
 async function getKey() {
-    try {
-        const response = await axios.post("https://smailpro.com/app/key", {
-            domain: "gmail.com",
-            username: "random",
-            server: "server-1",
-            type: "alias"
-        }, {
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0",
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3",
-                "Content-Type": "application/json",
-                "x-g-token": "",
-                "X-XSRF-TOKEN": "",
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "same-origin"
-            },
-            withCredentials: true
-        });
+  try {
+    const response = await requestJson({
+      method: 'POST',
+      url: 'https://smailpro.com/app/key',
+      data: {
+        domain: 'gmail.com',
+        username: 'random',
+        server: 'server-1',
+        type: 'alias',
+      },
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0',
+        'Accept-Language': 'it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3',
+        'x-g-token': '',
+        'X-XSRF-TOKEN': '',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+      },
+    });
 
-        return response.data.items;
-    } catch (error) {
-        console.error('Error getting key:', error.message);
-    }
+    return response.data.items;
+  } catch (error) {
+    console.error('Error getting key:', error.message);
+  }
 }
 
 async function getEmail() {
-    try {
-        const key = await getKey();
-        const response = await axios.get(`https://api.sonjj.com/email/gm/get`, {
-            params: {
-                key: key,
-                domain: "gmail.com",
-                username: "random",
-                server: "server-1",
-                type: "alias"
-            },
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0",
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3",
-                "x-rapidapi-ua": "RapidAPI-Playground",
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "cross-site"
-            }
-        });
+  try {
+    const key = await getKey();
+    const response = await requestJson({
+      method: 'GET',
+      url: 'https://api.sonjj.com/email/gm/get',
+      params: {
+        key,
+        domain: 'gmail.com',
+        username: 'random',
+        server: 'server-1',
+        type: 'alias',
+      },
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0',
+        'Accept-Language': 'it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3',
+        'x-rapidapi-ua': 'RapidAPI-Playground',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site',
+      },
+    });
 
-        return response.data.items;
-
-    } catch (error) {
-        console.error('Error getting email:', error.message);
-    }
+    return response.data.items;
+  } catch (error) {
+    console.error('Error getting email:', error.message);
+  }
 }
 
 async function getMid(email) {
-    await delay(10000);
-    try {
-        const key = await getKey();
-        const response = await axios.get(`https://api.sonjj.com/email/gm/check`, {
-            params: {
-                key: key,
-                'rapidapi-key': 'f871a22852mshc3ccc49e34af1e8p126682jsn734696f1f081',
-                email: email.email,
-                timestamp: email.timestamp
-            },
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0",
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3",
-                "x-rapidapi-ua": "RapidAPI-Playground",
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "cross-site"
-            }
-        });
+  await delay(10000);
+  try {
+    const key = await getKey();
+    const response = await requestJson({
+      method: 'GET',
+      url: 'https://api.sonjj.com/email/gm/check',
+      params: {
+        key,
+        'rapidapi-key': 'f871a22852mshc3ccc49e34af1e8p126682jsn734696f1f081',
+        email: email.email,
+        timestamp: email.timestamp,
+      },
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0',
+        'Accept-Language': 'it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3',
+        'x-rapidapi-ua': 'RapidAPI-Playground',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site',
+      },
+    });
 
-        return response.data.items[0].mid;
-    } catch (error) {
-        return await getMid(email);
-    }
+    return response.data.items[0].mid;
+  } catch (error) {
+    return await getMid(email);
+  }
 }
 
 async function getMessage(email) {
-    try {
-        const mid = await getMid(email);
-        const key = await getKey();
-        const response = await axios.get(`https://api.sonjj.com/email/gm/read`, {
-            params: {
-                key: key,
-                'rapidapi-key': 'f871a22852mshc3ccc49e34af1e8p126682jsn734696f1f081',
-                email: email.email,
-                message_id: mid
-            },
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0",
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3",
-                "x-rapidapi-ua": "RapidAPI-Playground",
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "cross-site"
-            }
-        });
+  try {
+    const mid = await getMid(email);
+    const key = await getKey();
+    const response = await requestJson({
+      method: 'GET',
+      url: 'https://api.sonjj.com/email/gm/read',
+      params: {
+        key,
+        'rapidapi-key': 'f871a22852mshc3ccc49e34af1e8p126682jsn734696f1f081',
+        email: email.email,
+        message_id: mid,
+      },
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0',
+        'Accept-Language': 'it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3',
+        'x-rapidapi-ua': 'RapidAPI-Playground',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site',
+      },
+    });
 
-        const securityCodeMatch = response.data.items.body.match(/>\s*(\d{6})\s*<\/span>/);
-        return securityCodeMatch[1];
-    } catch (error) {
-        console.error('Error getting message:', error.message);
-    }
+    const securityCodeMatch = response.data.items.body.match(/>\s*(\d{6})\s*<\/span>/);
+    return securityCodeMatch[1];
+  } catch (error) {
+    console.error('Error getting message:', error.message);
+  }
 }
 
 function delay(time) {
-    return new Promise((resolve) => setTimeout(resolve, time));
+  return new Promise((resolve) => setTimeout(resolve, time));
 }
 
 module.exports = {
-    getEmail,
-    getMessage
+  getEmail,
+  getMessage,
 };
+
