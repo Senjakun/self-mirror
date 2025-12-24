@@ -4,12 +4,68 @@ const path = require("path");
 const config = require('./config');
 const log = require('./Utils/log');
 const recMail = require('./Utils/recMail');
+const { createCaptchaSolver } = require('./captchaSolver');
 
-async function start() {
+// Statistics
+let stats = {
+  generated: 0,
+  failed: 0,
+  captchaSolved: 0
+};
+
+// Captcha solver instance
+let captchaSolver = null;
+
+async function initCaptchaSolver() {
+  captchaSolver = createCaptchaSolver(config.CAPTCHA_PROVIDER, config.CAPTCHA_API_KEY);
+  
+  if (config.CAPTCHA_PROVIDER !== 'manual') {
+    try {
+      const balance = await captchaSolver.getBalance();
+      log(`Captcha provider: ${config.CAPTCHA_PROVIDER}`, 'green');
+      log(`Balance: $${balance}`, 'green');
+    } catch (e) {
+      log(`Warning: Could not check captcha balance: ${e.message}`, 'yellow');
+    }
+  } else {
+    log('Using manual captcha solving mode', 'yellow');
+  }
+}
+
+async function start(count = 1) {
   console.clear();
+  log("=== Microsoft Account Creator (Hybrid) ===", "green");
+  log(`Provider: ${config.CAPTCHA_PROVIDER} | Target: ${count} accounts`, "green");
+  
+  await initCaptchaSolver();
+  
+  for (let i = 0; i < count; i++) {
+    log(`\n--- Creating account ${i + 1}/${count} ---`, "cyan");
+    
+    try {
+      await createSingleAccount();
+      stats.generated++;
+      log(`Account ${i + 1} created successfully!`, "green");
+    } catch (e) {
+      stats.failed++;
+      log(`Account ${i + 1} failed: ${e.message}`, "red");
+    }
+    
+    // Wait between accounts to avoid detection
+    if (i < count - 1) {
+      const waitTime = 5000 + Math.random() * 10000;
+      log(`Waiting ${Math.round(waitTime/1000)}s before next account...`, "yellow");
+      await delay(waitTime);
+    }
+  }
+  
+  log(`\n=== Finished ===`, "green");
+  log(`Generated: ${stats.generated} | Failed: ${stats.failed} | Captchas: ${stats.captchaSolved}`, "green");
+  
+  return stats;
+}
 
-  log("Starting...", "green");
-
+async function createSingleAccount() {
   log("Fetching Fingerprint...", "yellow");
   plugin.setServiceKey('');
   const fingerprint = await plugin.fetch({
@@ -19,11 +75,13 @@ async function start() {
   log("Applying Fingerprint...", "yellow");
   plugin.useFingerprint(fingerprint);
 
-  log("Fingerprint fetched and applied", "green");
-
-  if (config.USE_PROXY) {
+  if (config.USE_PROXY && config.PROXY_IP) {
     log("Applying proxy settings...", "green");
-    plugin.useProxy(`${config.PROXY_USERNAME}:${config.PROXY_PASSWORD}@${config.PROXY_IP}:${config.PROXY_PORT}`, {
+    const proxyString = config.PROXY_USERNAME 
+      ? `${config.PROXY_USERNAME}:${config.PROXY_PASSWORD}@${config.PROXY_IP}:${config.PROXY_PORT}`
+      : `${config.PROXY_IP}:${config.PROXY_PORT}`;
+    
+    plugin.useProxy(proxyString, {
       detectExternalIP: true,
       changeGeolocation: true,
       changeBrowserLanguage: true,
@@ -35,48 +93,43 @@ async function start() {
 
   log("Launching browser...", "green");
   const browser = await plugin.launch({
-    headless: false
+    headless: config.HEADLESS
   });
-  const page = await browser.newPage();
-  await page.setDefaultTimeout(3600000);
+  
+  try {
+    const page = await browser.newPage();
+    await page.setDefaultTimeout(config.BROWSER_TIMEOUT);
 
-  const viewport = await page.evaluate(() => ({
-    width: document.documentElement.clientWidth,
-    height: document.documentElement.clientHeight,
-  }));
-  log(`Viewport: [Width: ${viewport.width} Height: ${viewport.height}]`, "green");
+    const viewport = await page.evaluate(() => ({
+      width: document.documentElement.clientWidth,
+      height: document.documentElement.clientHeight,
+    }));
+    log(`Viewport: [${viewport.width}x${viewport.height}]`, "green");
 
-  // Check if the viewport is bigger than the current resolution - skip on Linux
-  if (process.platform === 'win32') {
-    try {
-      const { getCurrentResolution } = await import("win-screen-resolution");
-      if (viewport.width > getCurrentResolution().width || viewport.height > getCurrentResolution().height) {
-        log("Viewport is bigger than the current resolution, restarting...", "red");
-        await delay(5000);
-        await page.close();
-        await browser.close();
-        start();
-        return;
-      }
-    } catch (e) {
-      log("Skipping resolution check (not Windows)", "yellow");
-    }
+    await createAccount(page);
+    await page.close();
+  } finally {
+    await browser.close();
   }
-
-  await createAccount(page);
-  await page.close();
-  await browser.close();
-  process.exit(0);
-
 }
 
 async function createAccount(page) {
-  // Going to Outlook register page.
+  // Going to Outlook register page
   await page.goto("https://outlook.live.com/owa/?nlp=1&signup=1");
   await page.waitForSelector(SELECTORS.USERNAME_INPUT);
 
-  // Generating Random Personal Info.
+  // Generate Random Personal Info
   const PersonalInfo = await generatePersonalInfo();
+
+  // Select domain if hotmail
+  if (config.EMAIL_DOMAIN === '@hotmail.com') {
+    try {
+      await page.waitForSelector('#LiveDomainBoxList', { timeout: 5000 });
+      await page.select('#LiveDomainBoxList', 'hotmail.com');
+    } catch (e) {
+      log('Could not change domain, using default', 'yellow');
+    }
+  }
 
   // Username
   await page.type(SELECTORS.USERNAME_INPUT, PersonalInfo.username);
@@ -94,120 +147,162 @@ async function createAccount(page) {
   await page.type(SELECTORS.LAST_NAME_INPUT, PersonalInfo.randomLastName);
   await page.keyboard.press("Enter");
 
-  // Birth Date.
+  // Birth Date
   await page.waitForSelector(SELECTORS.BIRTH_DAY_INPUT);
   await delay(1000);
   await page.select(SELECTORS.BIRTH_DAY_INPUT, PersonalInfo.birthDay);
   await page.select(SELECTORS.BIRTH_MONTH_INPUT, PersonalInfo.birthMonth);
   await page.type(SELECTORS.BIRTH_YEAR_INPUT, PersonalInfo.birthYear);
   await page.keyboard.press("Enter");
+  
   const email = await page.$eval(SELECTORS.EMAIL_DISPLAY, el => el.textContent);
+  log(`Email: ${email}`, 'cyan');
+
+  // Wait for captcha
   await page.waitForSelector(SELECTORS.FUNCAPTCHA, { timeout: 60000 });
-  log("Please solve the captcha", "yellow");
-  await page.waitForFunction(
-    (selector) => !document.querySelector(selector),
-    {},
-    SELECTORS.FUNCAPTCHA
-  );
+  
+  // Solve captcha based on provider
+  if (config.CAPTCHA_PROVIDER === 'manual') {
+    log("Please solve the captcha manually...", "yellow");
+    await page.waitForFunction(
+      (selector) => !document.querySelector(selector),
+      { timeout: 600000 }, // 10 minutes for manual
+      SELECTORS.FUNCAPTCHA
+    );
+  } else {
+    // Auto solve with 2captcha or anycaptcha
+    const siteUrl = page.url();
+    try {
+      const token = await captchaSolver.solveFunCaptcha(siteUrl, config.FUNCAPTCHA_SITE_KEY);
+      stats.captchaSolved++;
+      
+      // Inject the captcha token
+      await page.evaluate((token) => {
+        // Find and set the captcha response
+        const fcCallback = window.fc && window.fc.callback;
+        if (fcCallback) {
+          fcCallback(token);
+        } else {
+          // Alternative: Try to find the verification callback
+          const verificationFrame = document.querySelector('#enforcementFrame');
+          if (verificationFrame && verificationFrame.contentWindow) {
+            verificationFrame.contentWindow.postMessage({ token: token }, '*');
+          }
+        }
+      }, token);
+      
+      // Wait for captcha frame to disappear
+      await page.waitForFunction(
+        (selector) => !document.querySelector(selector),
+        { timeout: 30000 },
+        SELECTORS.FUNCAPTCHA
+      );
+    } catch (e) {
+      log(`Auto captcha failed: ${e.message}, please solve manually`, 'red');
+      await page.waitForFunction(
+        (selector) => !document.querySelector(selector),
+        { timeout: 600000 },
+        SELECTORS.FUNCAPTCHA
+      );
+    }
+  }
+  
   log("Captcha Solved!", "green");
 
-  // Waiting for confirmed account.
+  // Wait for account confirmation
   try {
     await page.waitForSelector(SELECTORS.DECLINE_BUTTON, { timeout: 10000 });
     await page.click(SELECTORS.DECLINE_BUTTON);
   } catch (error) {
-    log("DECLINE_BUTTON not found within 10 seconds, checking for POST_REDIRECT_FORM...", "yellow");
+    log("Checking for alternative confirmation...", "yellow");
     const postRedirectFormExists = await page.$(SELECTORS.POST_REDIRECT_FORM);
     if (postRedirectFormExists) {
-      log("POST_REDIRECT_FORM found, checking for CLOSE_BUTTON...", "green");
-      await page.waitForSelector(SELECTORS.CLOSE_BUTTON);
-      log("CLOSE_BUTTON found, clicking...", "green");
+      await page.waitForSelector(SELECTORS.CLOSE_BUTTON, { timeout: 10000 });
       await page.click(SELECTORS.CLOSE_BUTTON);
-    } else {
-      log("Neither DECLINE_BUTTON nor POST_REDIRECT_FORM found.", "red");
     }
   }
-  await page.waitForSelector(SELECTORS.OUTLOOK_PAGE);
+  
+  await page.waitForSelector(SELECTORS.OUTLOOK_PAGE, { timeout: 30000 });
 
+  // Add recovery email if enabled
   if (config.ADD_RECOVERY_EMAIL) {
     log("Adding Recovery Email...", "yellow");
-    await page.goto("https://account.live.com/proofs/Manage");
-
-    // First verify.
-    await page.waitForSelector(SELECTORS.RECOVERY_EMAIL_INPUT);
-    const recoveryEmail = await recMail.getEmail();
-    await page.type(SELECTORS.RECOVERY_EMAIL_INPUT, recoveryEmail.email);
-    await page.keyboard.press("Enter");
-    await page.waitForSelector(SELECTORS.EMAIL_CODE_INPUT);
-    log("Waiting for Email Code... (first verify)", "yellow");
-    let firstCode = await recMail.getMessage(recoveryEmail);
-    log(`Email Code Received! Code: ${firstCode}`, "green");
-    await page.type(SELECTORS.EMAIL_CODE_INPUT, firstCode);
-    await page.keyboard.press("Enter");
-    await delay(5000);
-    if (await page.$(SELECTORS.VERIFICATION_ERROR)) {
-      log("Verification Error, resending code...", "red");
-      await resendCode(page, recoveryEmail);
-    }
-
     try {
-      await page.waitForSelector(SELECTORS.INTERRUPT_CONTAINER, { timeout: 10000 });
-    } catch (error) {
-      log("INTERRUPT_CONTAINER not found within 10 seconds, checking for AFTER_CODE...", "yellow");
-      const afterCodeExists = await page.$(SELECTORS.AFTER_CODE);
-      if (afterCodeExists) {
-        log("Second Verify Needed", "yellow");
-        // Second verify.
-        await page.click(SELECTORS.AFTER_CODE);
-        await page.waitForSelector(SELECTORS.DOUBLE_VERIFY_EMAIL);
-        await page.type(SELECTORS.DOUBLE_VERIFY_EMAIL, recoveryEmail.email);
-        await page.keyboard.press("Enter");
-        await page.waitForSelector(SELECTORS.DOUBLE_VERIFY_CODE);
-        log("Waiting for Email Code... (second verify)", "yellow");
-        let secondCode = await recMail.getMessage(recoveryEmail);
-        log(`Email Code Received! Code: ${secondCode}`, "green");
-        await page.type(SELECTORS.DOUBLE_VERIFY_CODE, secondCode);
-        await page.keyboard.press("Enter");
-        await delay(5000);
-        if (await page.$(SELECTORS.VERIFICATION_ERROR)) {
-          log("Verification Error, resending code...", "red");
-          await resendCode(page, recoveryEmail);
-        }
-        await page.waitForSelector(SELECTORS.INTERRUPT_CONTAINER);
-      } else {
-        log("Neither INTERRUPT_CONTAINER nor AFTER_CODE found.", "red");
-      }
+      await addRecoveryEmail(page);
+    } catch (e) {
+      log(`Recovery email failed: ${e.message}`, 'yellow');
     }
   }
 
   await writeCredentials(email, password);
-
+  return { email, password };
 }
 
-async function resendCode(page, recoveryEmail) {
-  await page.click(SELECTORS.RESEND_CODE);
-  await page.waitForSelector(SELECTORS.EMAIL_CODE_INPUT);
-  log("Waiting for Email Code...", "yellow");
+async function addRecoveryEmail(page) {
+  await page.goto("https://account.live.com/proofs/Manage");
+
+  await page.waitForSelector(SELECTORS.RECOVERY_EMAIL_INPUT, { timeout: 30000 });
+  const recoveryEmail = await recMail.getEmail();
+  await page.type(SELECTORS.RECOVERY_EMAIL_INPUT, recoveryEmail.email);
+  await page.keyboard.press("Enter");
+  
+  await page.waitForSelector(SELECTORS.EMAIL_CODE_INPUT, { timeout: 60000 });
+  log("Waiting for verification code...", "yellow");
+  
   let code = await recMail.getMessage(recoveryEmail);
-  log(`Email Code Received! Code: ${code}`, "green");
+  log(`Code received: ${code}`, "green");
   await page.type(SELECTORS.EMAIL_CODE_INPUT, code);
   await page.keyboard.press("Enter");
+  await delay(5000);
+
+  // Check for verification error and retry if needed
+  if (await page.$(SELECTORS.VERIFICATION_ERROR)) {
+    log("Verification error, retrying...", "yellow");
+    await page.click(SELECTORS.RESEND_CODE);
+    await page.waitForSelector(SELECTORS.EMAIL_CODE_INPUT);
+    code = await recMail.getMessage(recoveryEmail);
+    await page.type(SELECTORS.EMAIL_CODE_INPUT, code);
+    await page.keyboard.press("Enter");
+  }
+
+  // Handle potential second verification
+  try {
+    await page.waitForSelector(SELECTORS.INTERRUPT_CONTAINER, { timeout: 10000 });
+    log("Recovery email added!", "green");
+  } catch (e) {
+    const afterCodeExists = await page.$(SELECTORS.AFTER_CODE);
+    if (afterCodeExists) {
+      log("Second verification needed...", "yellow");
+      await page.click(SELECTORS.AFTER_CODE);
+      await page.waitForSelector(SELECTORS.DOUBLE_VERIFY_EMAIL);
+      await page.type(SELECTORS.DOUBLE_VERIFY_EMAIL, recoveryEmail.email);
+      await page.keyboard.press("Enter");
+      await page.waitForSelector(SELECTORS.DOUBLE_VERIFY_CODE);
+      
+      const secondCode = await recMail.getMessage(recoveryEmail);
+      log(`Second code received: ${secondCode}`, "green");
+      await page.type(SELECTORS.DOUBLE_VERIFY_CODE, secondCode);
+      await page.keyboard.press("Enter");
+      await page.waitForSelector(SELECTORS.INTERRUPT_CONTAINER, { timeout: 30000 });
+    }
+  }
+  
+  log("Recovery email setup complete!", "green");
 }
 
 async function writeCredentials(email, password) {
-  // Writes account's credentials on "accounts.txt".
-  const account = email + ":" + password;
-  log(account, "green");
+  const account = `${email}:${password}`;
+  log(`SUCCESS: ${account}`, "green");
   const accountsPath = path.join(__dirname, '..', config.ACCOUNTS_FILE);
-  fs.appendFileSync(accountsPath, `\n${account}`);
+  fs.appendFileSync(accountsPath, `${account}\n`);
 }
 
 async function generatePersonalInfo() {
-  const namesPath = path.join(__dirname, '..', config.NAMES_FILE);
-  const names = fs.readFileSync(namesPath, "utf8").split("\n");
+  const namesPath = path.join(__dirname, config.NAMES_FILE.replace('src/', ''));
+  const names = fs.readFileSync(namesPath, "utf8").split("\n").filter(n => n.trim());
   const randomFirstName = names[Math.floor(Math.random() * names.length)].trim();
   const randomLastName = names[Math.floor(Math.random() * names.length)].trim();
-  const username = randomFirstName + randomLastName + Math.floor(Math.random() * 9999);
+  const username = randomFirstName.toLowerCase() + randomLastName.toLowerCase() + Math.floor(Math.random() * 9999);
   const birthDay = (Math.floor(Math.random() * 28) + 1).toString();
   const birthMonth = (Math.floor(Math.random() * 12) + 1).toString();
   const birthYear = (Math.floor(Math.random() * 10) + 1990).toString();
@@ -215,8 +310,8 @@ async function generatePersonalInfo() {
 }
 
 async function generatePassword() {
-  const wordsPath = path.join(__dirname, '..', config.WORDS_FILE);
-  const words = fs.readFileSync(wordsPath, "utf8").split("\n");
+  const wordsPath = path.join(__dirname, config.WORDS_FILE.replace('src/', ''));
+  const words = fs.readFileSync(wordsPath, "utf8").split("\n").filter(w => w.trim());
   const firstword = words[Math.floor(Math.random() * words.length)].trim();
   const secondword = words[Math.floor(Math.random() * words.length)].trim();
   return firstword + secondword + Math.floor(Math.random() * 9999) + '!';
@@ -251,9 +346,21 @@ function delay(time) {
 }
 
 // Export for telegram bot
-module.exports = { start, generatePersonalInfo, generatePassword };
+module.exports = { 
+  start, 
+  createSingleAccount,
+  generatePersonalInfo, 
+  generatePassword,
+  stats,
+  getStats: () => stats,
+  resetStats: () => { stats = { generated: 0, failed: 0, captchaSolved: 0 }; }
+};
 
 // Run if called directly
 if (require.main === module) {
-  start();
+  const count = parseInt(process.argv[2]) || 1;
+  start(count).then(() => process.exit(0)).catch(e => {
+    console.error(e);
+    process.exit(1);
+  });
 }

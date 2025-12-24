@@ -6,55 +6,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 const queryClient = new QueryClient();
 
-const Index = () => {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-8">
-      <div className="max-w-2xl text-center space-y-6">
-        <h1 className="text-4xl font-bold text-foreground">Microsoft Account Creator + Telegram Bot</h1>
-        <p className="text-muted-foreground text-lg">
-          Outlook Account Generator dengan kontrol via Telegram Bot
-        </p>
-        
-        <div className="bg-card border border-border rounded-lg p-6 text-left space-y-4">
-          <h2 className="text-xl font-semibold">Quick Install di VPS</h2>
-          <pre className="bg-muted p-4 rounded-md overflow-x-auto text-sm">
-{`cd /root
-git clone YOUR_REPO_URL outlook-gen
-cd outlook-gen/outlook_gen
-chmod +x install.sh
-./install.sh`}
-          </pre>
-        </div>
-
-        <div className="bg-card border border-border rounded-lg p-6 text-left space-y-4">
-          <h2 className="text-xl font-semibold">Setup Telegram Bot</h2>
-          <pre className="bg-muted p-4 rounded-md overflow-x-auto text-sm">
-{`export TELEGRAM_BOT_TOKEN='your_token'
-export ADMIN_IDS='your_telegram_id'
-python3 telegram_bot.py`}
-          </pre>
-        </div>
-
-        <div className="bg-card border border-border rounded-lg p-6 text-left space-y-4">
-          <h2 className="text-xl font-semibold">Bot Commands</h2>
-          <ul className="space-y-2 text-muted-foreground">
-            <li><code className="bg-muted px-2 py-1 rounded">/start</code> - Menu utama</li>
-            <li><code className="bg-muted px-2 py-1 rounded">/setprovider</code> - Set captcha provider</li>
-            <li><code className="bg-muted px-2 py-1 rounded">/setapikey</code> - Set API key</li>
-            <li><code className="bg-muted px-2 py-1 rounded">/setdomain</code> - Set email domain</li>
-            <li><code className="bg-muted px-2 py-1 rounded">/addproxy</code> - Tambah proxy</li>
-            <li><code className="bg-muted px-2 py-1 rounded">/download</code> - Download accounts</li>
-          </ul>
-        </div>
-
-        <p className="text-sm text-muted-foreground">
-          Based on <a href="https://github.com/MatrixTM/OutlookGen" className="underline hover:text-foreground">MatrixTM/OutlookGen</a>
-        </p>
-      </div>
-    </div>
-  );
-};
-
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -62,11 +13,100 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<HomePage />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
+
+function HomePage() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+            🔐 Microsoft Account Creator
+          </h1>
+          <p className="text-gray-400">Hybrid Version - Auto Captcha + Anti-Detection</p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
+          <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+            <h3 className="text-xl font-semibold mb-4 text-blue-400">✨ Features</h3>
+            <ul className="space-y-2 text-gray-300">
+              <li>🤖 Auto Captcha (2Captcha/AnyCaptcha)</li>
+              <li>🎭 Anti-Detection Fingerprinting</li>
+              <li>📧 Auto Recovery Email</li>
+              <li>🌐 Proxy Support</li>
+              <li>📱 Telegram Bot Control</li>
+              <li>🔄 Batch Generation</li>
+            </ul>
+          </div>
+
+          <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+            <h3 className="text-xl font-semibold mb-4 text-green-400">💰 Captcha Pricing</h3>
+            <ul className="space-y-2 text-gray-300">
+              <li>🔵 2Captcha: ~$2.99/1000</li>
+              <li>🟣 AnyCaptcha: ~$2.99/1000</li>
+              <li>👤 Manual: Free (slower)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700 mb-8">
+          <h3 className="text-xl font-semibold mb-4 text-yellow-400">🚀 VPS Installation</h3>
+          <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
+{`# Clone and install
+git pull
+cd microsoft-account-creator
+chmod +x install.sh && ./install.sh
+
+# Configure (edit src/config.js)
+# Set CAPTCHA_PROVIDER and CAPTCHA_API_KEY
+
+# Run directly
+npm start              # 1 account
+node src/index.js 5    # 5 accounts
+node src/index.js 10   # 10 accounts
+
+# Or run with Telegram Bot
+export TELEGRAM_BOT_TOKEN='your-token'
+export ADMIN_IDS='your-id'
+npm run bot`}
+          </pre>
+        </div>
+
+        <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+          <h3 className="text-xl font-semibold mb-4 text-purple-400">📱 Telegram Commands</h3>
+          <div className="grid md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <code className="text-cyan-400">/start</code> - Main menu
+            </div>
+            <div>
+              <code className="text-cyan-400">/setapikey KEY</code> - Set captcha API key
+            </div>
+            <div>
+              <code className="text-cyan-400">/setproxy ip:port</code> - Set proxy
+            </div>
+            <div>
+              <code className="text-cyan-400">🚀 Generate</code> - 1/5/10/25/50/100 accounts
+            </div>
+            <div>
+              <code className="text-cyan-400">⚙️ Settings</code> - Provider, domain, etc.
+            </div>
+            <div>
+              <code className="text-cyan-400">📥 Download</code> - Get accounts file
+            </div>
+          </div>
+        </div>
+
+        <p className="text-center text-gray-500 mt-8 text-sm">
+          ⚠️ For educational purposes only. Use responsibly.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default App;
