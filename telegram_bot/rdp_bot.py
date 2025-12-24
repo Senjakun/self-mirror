@@ -1064,11 +1064,13 @@ def tumbal_build_golden_menu(call):
 
 <b>Pilih Windows untuk di-build:</b>
 
-Golden Image adalah Windows yang sudah:
-✅ Terinstall lengkap
-✅ RDP aktif
-✅ Driver lengkap
-✅ Siap clone ke VPS user
+⚠️ <b>Kamu perlu menyediakan URL ISO!</b>
+Setelah pilih Windows, bot akan minta link download ISO.
+
+🔗 <b>Sumber ISO populer:</b>
+• Archive.org: archive.org/details/windows-iso
+• TechBench: tb.rg-adguard.net
+• Massgrave: massgrave.dev
 
 ⏱ <b>Estimasi build:</b> 30-60 menit
 💾 <b>Output:</b> ~5-10GB compressed"""
@@ -1106,8 +1108,11 @@ Golden Image adalah Windows yang sudah:
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
 
 # ==================== START BUILD GOLDEN IMAGE ====================
+# State untuk menyimpan pending build
+pending_builds = {}
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("build_golden:"))
-def start_build_golden(call):
+def ask_iso_url(call):
     if not is_owner(call.from_user.id):
         bot.answer_callback_query(call.id, "⛔ Hanya untuk owner!")
         return
@@ -1134,20 +1139,81 @@ def start_build_golden(call):
         "tiny11": "Tiny11 23H2"
     }
     win_name = win_names.get(win_code, "Windows")
+    
+    # Simpan pending build
+    pending_builds[call.from_user.id] = {
+        "win_code": win_code,
+        "win_name": win_name,
+        "tumbal": tumbal
+    }
+    
+    bot.answer_callback_query(call.id, "📝 Kirim URL ISO...")
+    
+    text = f"""🔗 <b>INPUT ISO URL</b>
+━━━━━━━━━━━━━━━━━━
+
+🪟 <b>Windows:</b> {win_name}
+📍 <b>VPS:</b> {tumbal['name']} ({tumbal['ip']})
+
+Kirim link download ISO (direct link):
+
+<b>Contoh format:</b>
+<code>https://archive.org/download/win10atlas/Win10Atlas.iso</code>
+
+<b>🔗 Sumber ISO:</b>
+• archive.org/details/windows-iso
+• tb.rg-adguard.net (TechBench)
+• massgrave.dev
+
+⚠️ Pastikan link adalah direct download, bukan halaman web!
+
+Ketik /cancel untuk membatalkan."""
+
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("❌ Batal", callback_data="tumbal_build_golden"))
+    
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=markup)
+    bot.register_next_step_handler(call.message, process_iso_url)
+
+def process_iso_url(message):
+    user_id = message.from_user.id
+    
+    if message.text and message.text.lower() == "/cancel":
+        if user_id in pending_builds:
+            del pending_builds[user_id]
+        bot.reply_to(message, "❌ Build dibatalkan.")
+        return
+    
+    if user_id not in pending_builds:
+        bot.reply_to(message, "❌ Tidak ada pending build. Gunakan menu Build Golden Image.")
+        return
+    
+    iso_url = message.text.strip() if message.text else ""
+    
+    # Validasi URL
+    if not iso_url.startswith("http://") and not iso_url.startswith("https://"):
+        bot.reply_to(message, "❌ URL tidak valid! Harus dimulai dengan http:// atau https://")
+        bot.register_next_step_handler(message, process_iso_url)
+        return
+    
+    # Get pending build info
+    build_info = pending_builds.pop(user_id)
+    win_code = build_info["win_code"]
+    win_name = build_info["win_name"]
+    tumbal = build_info["tumbal"]
     image_name = f"golden-{win_code}"
-
-    bot.answer_callback_query(call.id, f"⏳ Memulai build {win_name}...")
-
+    
     ip = tumbal["ip"]
     password = tumbal["password"]
     name = tumbal["name"]
-
-    bot.send_message(call.message.chat.id, f"""🏗 <b>BUILD GOLDEN IMAGE</b>
+    
+    bot.send_message(message.chat.id, f"""🏗 <b>BUILD GOLDEN IMAGE</b>
 ━━━━━━━━━━━━━━━━━━
 
 📍 <b>VPS:</b> {name} ({ip})
 🪟 <b>Windows:</b> {win_name}
 📦 <b>Output:</b> {image_name}.img.gz
+🔗 <b>ISO:</b> {iso_url[:50]}...
 
 ⏳ <b>Proses build dimulai...</b>
 
@@ -1163,7 +1229,7 @@ def start_build_golden(call):
             script_path = os.path.join(script_dir, "build_golden_image.sh")
             
             if not os.path.exists(script_path):
-                bot.send_message(call.message.chat.id, "❌ Script build_golden_image.sh tidak ditemukan!")
+                bot.send_message(message.chat.id, "❌ Script build_golden_image.sh tidak ditemukan!")
                 return
             
             # Copy script ke tumbal VPS
@@ -1174,16 +1240,16 @@ def start_build_golden(call):
                 capture_output=True, timeout=60
             )
             
-            # Jalankan script
+            # Jalankan script dengan custom ISO URL
             result = subprocess.run(
                 ["sshpass", "-p", password, "ssh", "-o", "StrictHostKeyChecking=no",
                  "-o", "ServerAliveInterval=60", "-o", "ServerAliveCountMax=60",
-                 f"root@{ip}", f"bash /root/build_golden_image.sh {win_code} {image_name}"],
+                 f"root@{ip}", f"bash /root/build_golden_image.sh {win_code} {image_name} '{iso_url}'"],
                 capture_output=True, text=True, timeout=7200  # 2 jam timeout
             )
             
             if "BUILD COMPLETE" in result.stdout:
-                bot.send_message(call.message.chat.id, f"""✅ <b>BUILD SELESAI!</b>
+                bot.send_message(message.chat.id, f"""✅ <b>BUILD SELESAI!</b>
 ━━━━━━━━━━━━━━━━━━
 
 🪟 <b>Windows:</b> {win_name}
@@ -1197,12 +1263,13 @@ def start_build_golden(call):
 📤 <b>Upload ke GDrive:</b>
 Gunakan menu "List Local Images" untuk upload.""", parse_mode="HTML")
             else:
-                bot.send_message(call.message.chat.id, f"⚠️ Build mungkin gagal. Cek log:\n<code>{result.stdout[-1000:]}</code>", parse_mode="HTML")
+                error_log = result.stdout[-1500:] if result.stdout else result.stderr[-1500:]
+                bot.send_message(message.chat.id, f"⚠️ Build mungkin gagal. Cek log:\n<code>{error_log}</code>", parse_mode="HTML")
             
         except subprocess.TimeoutExpired:
-            bot.send_message(call.message.chat.id, "⏰ Build timeout (>2 jam). Cek manual di VPS tumbal.")
+            bot.send_message(message.chat.id, "⏰ Build timeout (>2 jam). Cek manual di VPS tumbal.")
         except Exception as e:
-            bot.send_message(call.message.chat.id, f"❌ Error: {str(e)}")
+            bot.send_message(message.chat.id, f"❌ Error: {str(e)}")
 
     threading.Thread(target=run_build, daemon=True).start()
 
