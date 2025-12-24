@@ -756,6 +756,70 @@ def list_users(message):
     text = f"👥 <b>Daftar User ({len(data['allowed_users'])}):</b>\n\n{user_list}"
     bot.reply_to(message, text, parse_mode="HTML")
 
+# ==================== UPDATE BOT COMMAND /update ====================
+@bot.message_handler(commands=['update'])
+def update_bot_command(message):
+    if not is_owner(message.from_user.id):
+        bot.reply_to(message, "⛔ Hanya owner yang bisa update bot!")
+        return
+
+    bot.reply_to(message, "🔄 <b>Memulai update bot...</b>", parse_mode="HTML")
+
+    def run_update():
+        try:
+            import subprocess
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            # Git pull
+            result = subprocess.run(
+                ["git", "pull", "origin", "main"],
+                cwd=script_dir,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            git_output = result.stdout + result.stderr
+            
+            if result.returncode == 0:
+                if "Already up to date" in git_output:
+                    bot.send_message(
+                        message.chat.id,
+                        "✅ <b>Bot sudah versi terbaru!</b>\n\nTidak ada update baru.",
+                        parse_mode="HTML"
+                    )
+                else:
+                    bot.send_message(
+                        message.chat.id,
+                        f"""✅ <b>Update berhasil!</b>
+
+<b>Output:</b>
+<code>{git_output[:500]}</code>
+
+🔄 <b>Restart bot...</b>
+Bot akan restart dalam 3 detik.""",
+                        parse_mode="HTML"
+                    )
+                    # Restart service
+                    import time
+                    time.sleep(3)
+                    subprocess.run(["systemctl", "restart", "rdpbot"], check=False)
+            else:
+                bot.send_message(
+                    message.chat.id,
+                    f"""❌ <b>Update gagal!</b>
+
+<b>Error:</b>
+<code>{git_output[:500]}</code>""",
+                    parse_mode="HTML"
+                )
+        except subprocess.TimeoutExpired:
+            bot.send_message(message.chat.id, "⏰ Update timeout!")
+        except Exception as e:
+            bot.send_message(message.chat.id, f"❌ Error: <code>{str(e)}</code>", parse_mode="HTML")
+
+    threading.Thread(target=run_update, daemon=True).start()
+
 # ==================== INSTALL COMMAND /install ====================
 @bot.message_handler(commands=['install'])
 def install_command(message):
