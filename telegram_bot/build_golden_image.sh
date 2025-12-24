@@ -2,32 +2,30 @@
 
 # Build Golden Image Script
 # Jalankan di VPS Tumbal untuk membuat golden image Windows
-# Usage: bash build_golden_image.sh [WIN_CODE] [IMAGE_NAME]
+# Usage: bash build_golden_image.sh [WIN_CODE] [IMAGE_NAME] [CUSTOM_ISO_URL]
 
 WIN_CODE=${1:-"10"}
 IMAGE_NAME=${2:-"win10-golden"}
+CUSTOM_ISO_URL=${3:-""}
 WORK_DIR="/root/golden-build"
 OUTPUT_DIR="/root/rdp-images"
 
-# Windows versions - mapped to dockurr/windows image tags and ISOs
-declare -A WIN_URLS
-# Server editions
-WIN_URLS["2012r2"]="https://archive.org/download/windows-server-2012-r2/WinServer2012R2.iso"
-WIN_URLS["2016"]="https://archive.org/download/windows-server-2016/WinServer2016.iso"
-WIN_URLS["2019"]="https://archive.org/download/windows-server-2019/WinServer2019.iso"
-WIN_URLS["2022"]="https://archive.org/download/windows-server-2022/WinServer2022.iso"
-WIN_URLS["2025"]="https://archive.org/download/windows-server-2025/WinServer2025.iso"
-# Windows 10 editions
-WIN_URLS["10pro"]="https://archive.org/download/windows-10-pro-x64/Win10_Pro_x64.iso"
-WIN_URLS["10lite"]="https://archive.org/download/windows-10-superlite/Win10_SuperLite_x64.iso"
-WIN_URLS["10atlas"]="https://archive.org/download/windows-10-atlas/Win10_Atlas_x64.iso"
-# Windows 11 editions
-WIN_URLS["11pro"]="https://archive.org/download/windows-11-pro-x64/Win11_Pro_x64.iso"
-WIN_URLS["11lite"]="https://archive.org/download/windows-11-superlite/Win11_SuperLite_x64.iso"
-WIN_URLS["11atlas"]="https://archive.org/download/windows-11-atlas/Win11_Atlas_x64.iso"
-# Tiny editions (lightweight)
-WIN_URLS["tiny10"]="https://archive.org/download/tiny10-23h2/tiny10_x64_23h2.iso"
-WIN_URLS["tiny11"]="https://archive.org/download/tiny11-23h2/tiny11_x64_23h2.iso"
+# Windows versions - using dockurr/windows docker image tags
+# These are just identifiers, actual ISOs need custom URL or local file
+declare -A WIN_NAMES
+WIN_NAMES["2012r2"]="Windows Server 2012 R2"
+WIN_NAMES["2016"]="Windows Server 2016"
+WIN_NAMES["2019"]="Windows Server 2019"
+WIN_NAMES["2022"]="Windows Server 2022"
+WIN_NAMES["2025"]="Windows Server 2025"
+WIN_NAMES["10pro"]="Windows 10 Pro"
+WIN_NAMES["10lite"]="Windows 10 SuperLite"
+WIN_NAMES["10atlas"]="Windows 10 Atlas"
+WIN_NAMES["11pro"]="Windows 11 Pro"
+WIN_NAMES["11lite"]="Windows 11 SuperLite"
+WIN_NAMES["11atlas"]="Windows 11 Atlas"
+WIN_NAMES["tiny10"]="Tiny10"
+WIN_NAMES["tiny11"]="Tiny11"
 
 # Virtio drivers
 VIRTIO_URL="https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso"
@@ -35,9 +33,19 @@ VIRTIO_URL="https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/sta
 echo "================================================"
 echo "🏗️ BUILD GOLDEN IMAGE"
 echo "================================================"
-echo "📦 Windows: $WIN_CODE"
+echo "📦 Windows: ${WIN_NAMES[$WIN_CODE]:-$WIN_CODE}"
 echo "📁 Output: $OUTPUT_DIR/${IMAGE_NAME}.img"
+if [ -n "$CUSTOM_ISO_URL" ]; then
+    echo "🔗 Custom ISO: $CUSTOM_ISO_URL"
+fi
 echo "================================================"
+
+# Validate WIN_CODE
+if [ -z "${WIN_NAMES[$WIN_CODE]}" ]; then
+    echo "❌ WIN_CODE tidak valid: $WIN_CODE"
+    echo "Pilihan: 2012r2, 2016, 2019, 2022, 2025, 10pro, 10lite, 10atlas, 11pro, 11lite, 11atlas, tiny10, tiny11"
+    exit 1
+fi
 
 # Install dependencies
 echo "📦 Installing dependencies..."
@@ -61,20 +69,30 @@ cd "$WORK_DIR"
 # Download Windows ISO if not exists
 WIN_ISO="$WORK_DIR/windows.iso"
 if [ ! -f "$WIN_ISO" ]; then
-    WIN_URL="${WIN_URLS[$WIN_CODE]}"
-    if [ -z "$WIN_URL" ]; then
-        echo "❌ WIN_CODE tidak valid: $WIN_CODE"
-        echo "Pilihan: 2012r2, 2016, 2019, 2022, 2025, 10pro, 10lite, 10atlas, 11pro, 11lite, 11atlas, tiny10, tiny11"
+    if [ -n "$CUSTOM_ISO_URL" ]; then
+        echo "📥 Downloading Windows ISO from custom URL..."
+        wget -q --show-progress -O "$WIN_ISO" "$CUSTOM_ISO_URL"
+    else
+        echo "❌ Custom ISO URL diperlukan!"
+        echo ""
+        echo "💡 Cara penggunaan:"
+        echo "   bash build_golden_image.sh [WIN_CODE] [IMAGE_NAME] [ISO_URL]"
+        echo ""
+        echo "📥 Contoh:"
+        echo "   bash build_golden_image.sh 10atlas golden-10atlas https://example.com/win10atlas.iso"
+        echo ""
+        echo "🔗 Sumber ISO populer:"
+        echo "   - Archive.org: https://archive.org/details/windows-iso"
+        echo "   - MSDN/Techbench: https://techbench.rg-adguard.net/"
         exit 1
     fi
-    
-    echo "📥 Downloading Windows ISO..."
-    wget -q --show-progress -O "$WIN_ISO" "$WIN_URL"
     
     if [ ! -f "$WIN_ISO" ] || [ ! -s "$WIN_ISO" ]; then
         echo "❌ Gagal download Windows ISO"
+        echo "   Periksa URL atau koneksi internet"
         exit 1
     fi
+    echo "✅ Windows ISO downloaded: $(du -h "$WIN_ISO" | cut -f1)"
 fi
 
 # Download VirtIO drivers if not exists
