@@ -3,7 +3,8 @@
 # RDP BOT INSTALLER - One Click Setup
 # ==========================================
 
-set -euo pipefail
+# Don't use 'set -u' because BASH_SOURCE may be unbound when run via curl | bash
+set -eo pipefail
 
 # Non-interactive install (prevents stuck prompts on Ubuntu)
 export DEBIAN_FRONTEND=noninteractive
@@ -183,26 +184,39 @@ fi
 
 echo -e "${GREEN}✅ Dependencies terinstall${NC}"
 
-# Clone or copy repo
+# Clone or copy repo - FORCE GitHub clone when run via curl
 if [ -n "$GITHUB_REPO" ]; then
     echo -e "${BLUE}⏳ Cloning dari GitHub...${NC}"
     rm -rf $INSTALL_DIR
-    git clone $GITHUB_REPO $INSTALL_DIR
+    git clone "$GITHUB_REPO" $INSTALL_DIR
+    
+    # If bot is in telegram_bot subfolder, move files up
+    if [ -f "$INSTALL_DIR/telegram_bot/rdp_bot.py" ]; then
+        mv "$INSTALL_DIR/telegram_bot"/* $INSTALL_DIR/
+        rm -rf "$INSTALL_DIR/telegram_bot"
+    fi
 else
+    # No GitHub URL - try local files, but this only works when script is on disk
     echo -e "${BLUE}⏳ Menggunakan file lokal...${NC}"
     mkdir -p $INSTALL_DIR
     
-    # Find and copy bot files
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    
-    if [ -f "$SCRIPT_DIR/rdp_bot.py" ]; then
-        cp -r "$SCRIPT_DIR"/* $INSTALL_DIR/
+    # Get script directory safely
+    SCRIPT_DIR="${BASH_SOURCE[0]:-}"
+    if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR" ]; then
+        SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_DIR")" && pwd)"
+        if [ -f "$SCRIPT_DIR/rdp_bot.py" ]; then
+            cp -r "$SCRIPT_DIR"/* $INSTALL_DIR/
+        fi
     elif [ -f "rdp_bot.py" ]; then
         cp -r ./* $INSTALL_DIR/
     elif [ -f "telegram_bot/rdp_bot.py" ]; then
         cp -r telegram_bot/* $INSTALL_DIR/
     elif [ -f "../rdp_bot.py" ]; then
         cp -r ../* $INSTALL_DIR/
+    else
+        echo -e "${RED}❌ Tidak ada file lokal. Gunakan GitHub URL!${NC}"
+        echo -e "${YELLOW}Contoh: masukkan URL repo saat diminta${NC}"
+        exit 1
     fi
 fi
 
