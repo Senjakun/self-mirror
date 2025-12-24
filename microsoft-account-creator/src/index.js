@@ -1,4 +1,4 @@
-const { plugin } = require('puppeteer-with-fingerprints');
+const { plugin, applyProxyAuth } = require('./browserProvider');
 const fs = require("fs");
 const path = require("path");
 const config = require('./config');
@@ -98,6 +98,7 @@ async function createSingleAccount() {
   
   try {
     const page = await browser.newPage();
+    await applyProxyAuth(page);
     await page.setDefaultTimeout(config.BROWSER_TIMEOUT);
 
     const viewport = await page.evaluate(() => ({

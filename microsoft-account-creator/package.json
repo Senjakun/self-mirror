@@ -22,6 +22,9 @@
   "license": "MIT",
   "dependencies": {
     "node-telegram-bot-api": "^0.64.0",
+    "puppeteer": "^21.11.0"
+  },
+  "optionalDependencies": {
     "puppeteer-with-fingerprints": "^1.6.0"
   },
   "engines": {
